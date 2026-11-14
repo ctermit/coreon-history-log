@@ -1,39 +1,32 @@
-# Technical architecture (v0.1.0 prototype)
+# Technical architecture — v0.2.0
 
-## Why a widget
-A Figma widget is visible on the canvas and its synchronized state is shared by collaborators editing the same file/widget instance. The widget can open a richer `figma.showUI()` window without a separately installed plugin.
+## Runtime
+Figma Design widget: the registered widget ID in `manifest.json` is stable. Canvas uses the Figma Widget API; a separate HTML iframe opened via `figma.showUI()` provides the full searchable history. The iframe is held open by returning a pending Promise from the click event; CLOSE resolves it.
 
 ## Source map
-- `manifest.json`: Figma widget manifest, with owner-registered widget ID `1703534862855031560`.
-- `widget-src/code.tsx`: on-canvas interface, Figma events and synced storage.
-- `widget-src/model.ts`: pure validation, ordering and record semantics.
-- `ui.html`: add and full-history window.
-- `scripts/build.mjs`, `dist/code.js`: self-contained build output.
-- `tests/`: unit/model and widget smoke tests; Figma runtime still needs human verification.
+- `widget-src/code.tsx`: inline composer, editing, rendering and iframe messaging.
+- `widget-src/model.ts`: history ordering, record schemas, date formatting and limited Markdown parser.
+- `ui.html`: full searchable/paginated history and older-record editing; safe DOM elements, no dynamic `innerHTML`.
+- `scripts/build.mjs`: transpiles and concatenates TS/TSX to tracked `dist/code.js`.
+- `tests/`: model, widget and HTML-history smoke checks.
 - `.github/workflows/ci.yml`: TypeScript, tests, build.
 
-## State contract
-- `useSyncedMap<HistoryRecord>('history-records-v1')`: entries keyed by ID.
-- `useSyncedState('history-mode-v1', 'product')`
-- `useSyncedState('history-display-limit-v1', 5)`
-- `HistoryRecord.schemaVersion = 1`
-- Record fields: ID, mode, kind (`change`/`handoff`), DS category, text, author ID and name, `createdAt`, `updatedAt`.
-- Creation uses `figma.currentUser` and `Date.now()`. Editing preserves original author and creation time.
-- DS handoff is a kind of record, allowed only in DS mode.
-- Stored content is **per widget instance**, not automatically shared between files or other widget copies.
+## Data invariants
+- **Do not change** `useSyncedMap<HistoryRecord>('history-records-v1')`; entries are keyed by record ID.
+- Existing `schemaVersion: 1` records retain `mode: product | ds`, timestamp, author, text and category. No migration is required: history ordering simply includes both legacy modes.
+- New records use `schemaVersion: 2` without mode. They include ID, kind (`change` or `handoff`), category, text, author ID/name, `createdAt`, `updatedAt`.
+- Retain `history-display-limit-v1`; other legacy synced keys may remain but are unused. UI-only draft/editor state has dedicated `*-v2` keys.
+- Editing a record preserves its original author, creation timestamp and legacy fields. «Передано» is a distinct record kind, not a category.
+- All data belongs to **one widget instance** in its Figma file, not a cross-file database.
 
-## Render and performance
-All records are currently enumerated and sorted to pick the latest N; **only N entries are rendered on canvas**. The UI window presents history in pages. Hidden older records aren't represented by invisible Figma nodes.
+## Rendering and formatting
+- Enumerate/sort records for the timeline; render only latest N (3, 5, 10 or 15) on canvas. Up to 18 Markdown lines per canvas note, with complete text in history.
+- The iframe receives the full snapshot and paginates locally (40 records/page); this is not server-side paging.
+- Markdown source is stored as plain text. The canvas uses Figma Text/Span; the iframe uses safely constructed DOM. Only HTTP(S) URLs are links.
+- Every full re-render still enumerates the synced map: real-world 50/200/500+ performance and multi-user stability must be measured before publication.
 
-This cuts scene complexity but does *not* eliminate full-map enumeration/synchronization costs. Verify actual Figma behavior with 50/200/500+ records. Consider partitioned indexes, paging or archives **only after measurement**. Do not casually change synced keys/data format.
-
-## Privacy and security
-No backend, network calls, telemetry, customer data or credentials in the prototype. `manifest.json` denies remote domains. Public repository may include only synthetic fixtures and generic code.
-Never put real logs, screenshot samples, private issue IDs, tokens or internal file links into commits or public PR descriptions.
-
-## Known prototype limitations
-- In Figma, runtime interaction and update behavior are not independently validated.
-- Some button/edit behaviors and accessibility need hands-on testing.
-- No production migration path or persistent off-widget backup/export.
-- Sequential multi-designer use expected; conflicting simultaneous edits are secondary.
-- Widget development/publishing will assign an ID; ensure it stays unchanged after registration.
+## Current limitations
+- Editable drafts are also synced state and can conflict under simultaneous concurrent editing.
+- An inline Figma Input commits on text-edit end, creating a two-step save flow; UX refinement is planned.
+- Real complex files, multi-user changes, widget updates/recovery and browser runtime are not fully validated.
+- No automatic backup/export, backend, telemetry, or network access.

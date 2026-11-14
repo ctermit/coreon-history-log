@@ -1,43 +1,38 @@
-# Quality and verification plan
+# Quality and verification — v0.2.0
 
-Use this checklist for Figma runtime QA; checkboxes are deliberately open until tested. An offline unit test or green CI is **not** a substitute for human testing in Figma.
+Green CI and offline tests are necessary but **not proof of end-to-end Figma runtime behavior**.
 
-## Baseline
-- [ ] Load development widget in Figma Desktop from `manifest.json`.
-- [ ] Open in browser editor if supported and compare behavior.
-- [ ] Add a product record: user and date/time auto-populate correctly.
-- [ ] Inline-edit a visible record; unchanged author and original date; new update timestamp.
-- [ ] Add / edit a DS record under each category Added / Changed / Fixed.
-- [ ] Insert a DS-only «Передано» milestone; ensure product mode cannot create it.
-- [ ] Change widget mode and limit (3/5/10/15); check defaults and mode separation.
-- [ ] Create a long/multi-line entry and edit it twice.
-- [ ] Open full-history window, search, edit an older entry and navigate pages.
-- [ ] Close/reopen UI and file; confirm no missing or duplicate records.
-- [ ] Sequential editing from two designer accounts; verify propagation to second user.
-- [ ] Check behavior in view-only permissions (readability vs interaction).
+## Manual evidence reported by the owner (15 Nov 2026)
+- [x] Registered Figma Desktop development widget launches.
+- [x] v0.1.x popup bug fixed; adding records and opening full history work.
+- [x] v0.2.0 core functionality works in Figma Desktop at a basic level.
+- [x] About 20 hand-written records in an otherwise empty file show no obvious delay.
+- [x] Larger synthetic history in an otherwise empty file showed no obvious slowdown after opening.
+- [ ] Record actual timings, file complexity and platform details.
+- [ ] Complete usability/visual acceptance — specifically **not yet accepted**.
 
-## Performance at 50 / 200 / 500+ stored records
-For each volume, record file complexity, OS, Figma version, mode, visible limit and approximate measurements:
-- [ ] Insert/open widget without UI freezing.
-- [ ] Switch mode and visible limit without UI freezing.
-- [ ] Add/edit on canvas and in history window without lost input.
-- [ ] Search, paginate and close the full-history UI.
-- [ ] Reopen Figma file; verify durability and count.
-- [ ] Inspect how many record nodes render on canvas (must not equal all historical records).
+## Data and upgrade
+- [ ] Verify all old v1 product and DS entries appear once in unified history.
+- [ ] Verify old IDs, authors, timestamps, text and categories are unchanged after upgrade and rollback.
+- [ ] Add/edit Markdown including safe links and lists on canvas and in history.
+- [ ] Confirm author and local creation date/time to minutes.
+- [ ] Confirm durability after closing and reopening the Figma file and after updating a widget.
+- [ ] Test multiple widget copies in one file and a copy of a real project.
+- [ ] Test sequential edits by two real designers; verify permissions for view-only users.
 
-Capture timings/observations in PR or issue without private screenshots or user data. Never invent benchmark numbers.
+## Performance
+For 50, 200 and 500+ stored entries, record operating system, Figma version, file complexity, visible N, and approximate timings:
+- [ ] Canvas insert/open and reopen without freezing.
+- [ ] Add/edit, history search/filter/pagination without dropped inputs.
+- [ ] Observe actual node count rendered on canvas, not hidden copies.
+- [ ] Verify no missing/duplicate entries after reload.
+- [ ] Measure impact in a non-empty, real project; the empty-file test alone is insufficient.
 
-## Data safety and upgrade
-- [ ] Create records in old development build; update widget; confirm persistence and unchanged IDs/authors/creation time.
-- [ ] Check invalid/empty entries and long text.
-- [ ] Check fast repeated add; no accidental duplicates.
-- [ ] Confirm default mode/limit for fresh widget.
-- [ ] Verify multiple copies in one file do not unexpectedly share data.
-- [ ] Test large history back-up/export strategy before production migration.
+## Release checklist
+- PR/main exact SHA and CI success verified.
+- No private data, secrets, internal links or unexpected remote/network operations.
+- Owner-reviewed UX, migration safety and recovery path.
+- Explicit owner authorization before any Figma Community publication.
 
-## Release gate
-- Exact code revision and relevant CI run identified.
-- `npm run check` passes in CI.
-- No client/internal artifacts, credentials, fixed Figma file IDs or unexpected network requests.
-- Manual Figma QA with findings documented.
-- Owner explicitly approves public publication; no automated deployment.
+## Note
+v0.2.0 source checkpoint has **18 passing automated tests** (model, widget, HTML UI); these complement, not replace, the manual checklist above.
