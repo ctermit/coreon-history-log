@@ -1,49 +1,35 @@
 # Coreon History Log — product decisions
 
-**Status:** technical prototype v0.1.0; GitHub CI passed; manual Figma runtime QA **not yet done**.
-**Last decision update:** 2026-11-14. This document supersedes outdated status lines in the original research conversation.
+**Status:** v0.2.0 checked into GitHub as a development baseline. Initial hands-on Figma Desktop tests confirmed core flows; UX and visual polish are still needed. **Not published to Figma Community.**
+**Decision update:** 2026-11-15.
 
 ## Purpose
-Record **meaningful design changes** for other designers to read. Technical version history alone is not sufficient. We aim for minimal effort, fast reading and a responsive file even with substantial past history.
+A small, shared, human-written design change log visible inside Figma. Low-friction writing and reading matter more than tracking every technical operation.
 
-## Confirmed decisions
-- Product: **Coreon History Log**; on-canvas widget may use a shorter «История изменений» heading.
-- Repository: personal account `ctermit/coreon-history-log`, **public**; publish generic widget to Figma Community only after QA and explicit owner approval.
-- Separate from existing Coreon Figma Plugin and from specific company/customer files, IDs or URLs.
-- Prioritize **Figma widget with an extended UI window**. Plugin-only is not the current plan; reassess if Figma runtime tests uncover a blocker.
-- No install required for colleagues to see/interact with an already inserted widget (subject to Figma permissions).
-- Per-instance synced history in the Figma file; no mandatory external storage or authentication.
-- On canvas show only the newest **5** product records or **10** DS records by default; configurable 3 / 5 / 10 / 15. Older items must **not** be rendered as hidden nodes; open them in a separate window.
-- Fast add, fast inline editing of visible entries; automatic logged-in author and creation date/time; full history with search in a window.
-- Same data engine, different behaviors for **product** and **design system** journals.
-
-## Two distinct workflows
-### Product design
-- Human-written free-text explanations of significant design changes; long or short notes allowed.
-- Task IDs/links may be recorded, but an organization-specific format is not required.
-- **No «Передано»** phase. Statuses are optional and not forced.
-
-### Design system: tokens and icons
-- Collect changes between developer handoffs.
-- Categories currently observed: **Added**, **Changed**, **Fixed**.
-- **«Передано»** is a separate milestone closing a batch passed to developers, not a fourth change category.
-- Goal later: speed up collection and handoff, including optional structured lists and generated summaries.
-- Do not assume `Fixed` or any future category can always be inferred from a technical diff.
+## Approved v0.2.0 behavior
+- Public generic Figma **Design** widget; no private company, project or client identifiers and no mandatory backend.
+- **One widget instance = one unified chronological history.** No product-vs-design-system mode switch. Multiple widget instances/files do not merge histories.
+- Visible-on-canvas limit: **3 / 5 / 10 / 15**, default 5. Only the newest N are rendered; older records remain in the shared map and appear in the full-history window.
+- **Inline add and edit** on the canvas. The HTML window is for full history, search and edits of older records; it shows 40 records per page.
+- Optional categories **Added / Changed / Fixed**; Changed is the default, and its label may be omitted on canvas. **«Передано»** is a distinct handoff event, independent of categories and available for any log.
+- Automatically record author, creation date and **local time to minutes**; edits preserve original author and creation time.
+- Limited Markdown in records: **bold**, safe HTTP(S) links including bare URLs, bulleted and numbered lists. Store the source text, not HTML. An expandable syntax help is available in add and edit.
+- Preserve **all existing v0.1.x records**, including their legacy `mode` and `schemaVersion: 1`, in the unchanged synced map. Show both former modes together in the new timeline; new records use `schemaVersion: 2`.
+- No automatic tracking of frame changes, AI summaries, analytics, remote requests or account authentication in this release.
 
 ## Collaboration and retention
-- Multiple designers will work sequentially in most cases; **conflicting simultaneous edits of one record are not a blocking MVP requirement**.
-- Preserve records across reopens and releases. Never migrate or delete real history silently.
-- Existing FigLog and component journals remain the operational source until a deliberately approved migration.
+- Sequential editing by multiple designers is the primary collaboration scenario; simultaneous same-record editing is not required for the initial release.
+- Never delete, rewrite or migrate existing history silently. Keep existing FigLog/component logs until a separately approved switch.
+- No network requests are needed for current features.
 
-## Product principles
-- On-canvas UI is a quick entry point, not a full database interface.
-- No global «created/updated» clutter or always-visible delete buttons by default.
-- Keep controls and status labels minimal; follow design-system examples without copying private content.
-- Users must confirm meaning of any automatically proposed change summary.
+## Current quality status and release strategy
+- User confirmed rendering, adding records and history opening in Figma Desktop. Approx. 20 handwritten records and a larger synthetic history in an otherwise empty file showed no obvious slowdown; no benchmark timings or results for real complex files were recorded.
+- v0.2.0 is a **functional baseline, not a usability acceptance**. Many small UX and visual adjustments are planned.
+- Public Figma Community publication is a near-term goal **after a cohesive UX pass, persistence/update compatibility checks and owner approval**, not after every aesthetic detail is polished.
+- Initial source/build tests passing do not replace Figma runtime QA.
 
-## Open decisions (do not invent answers)
-- Permissions to edit someone else's record; edit audit trail; deletion and recovery behavior.
-- Exact DS record/group layout and list input; handling links to tasks/frames.
-- Handoff implementation details, filtering, exports and archiving.
-- Long-history storage strategy after empirical Figma load testing.
-- Legacy FigLog/component journal migration, public license, branding assets and publication account/widget ID.
+## Open decisions
+- Granular editing permissions, history of edits, deletion and recovery.
+- Multi-designer and real-project performance; cross-version update and rollback.
+- Public license, widget artwork, Community description and support contact.
+- Rich-editor shortcuts beyond documented Markdown and possible future automatic summaries.

@@ -1,21 +1,23 @@
 {
   "name": "Coreon History Log",
+  "id": "1703534862855031560",
   "api": "1.0.0",
   "main": "dist/code.js",
   "ui": "ui.html",
-  "widgetApi": "1.0.0",
   "permissions": [
     "currentuser"
   ],
-  "containsWidget": true,
+  "capabilities": [],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
   "editorType": [
     "figma"
   ],
-  "documentAccess": "dynamic-page",
+  "containsWidget": true,
+  "widgetApi": "1.0.0",
   "networkAccess": {
     "allowedDomains": [
       "none"
     ]
-  },
-  "id": "1703534862855031560"
+  }
 }
