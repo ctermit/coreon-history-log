@@ -1,0 +1,12 @@
+{
+  "name": "Coreon History Log",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "ui.html",
+  "widgetApi": "1.0.0",
+  "permissions": ["currentuser"],
+  "containsWidget": true,
+  "editorType": ["figma", "figjam"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": { "allowedDomains": ["none"] }
+}
