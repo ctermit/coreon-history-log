@@ -2,7 +2,6 @@
 const { widget } = figma;
 const { AutoLayout, Text, Input, Line, useSyncedMap, useSyncedState, usePropertyMenu, useEffect } = widget;
 
-declare const __html__: string;
 
 const COLORS = {
   ink: '#1B1E23', muted: '#6D7280', subtle: '#E7E9EE', white: '#FFFFFF',
