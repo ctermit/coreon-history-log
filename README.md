@@ -1,5 +1,18 @@
 # Coreon History Log
 
+**Stage:** v0.1.0 technical prototype. CI green; manual runtime validation in Figma pending. Not published.
+
+## Project documentation
+
+- [Product decisions](docs/PROJECT.md) — current requirements and two journal workflows
+- [Roadmap](docs/ROADMAP.md) — ordered milestones and explicit release gates
+- [Architecture](docs/ARCHITECTURE.md) — data model, synced keys and performance limitations
+- [Quality checklist](docs/QA.md) — real Figma verification and migration tests
+- [Research and competitors](docs/RESEARCH.md) — reusable external references
+- [Repository operations](docs/OPERATIONS.md) — CI, branch settings, publication
+- [Agent instructions](AGENTS.md) — durable context for Codex and coding agents
+- [Security policy](SECURITY.md) — public repository precautions
+
 A lightweight, collaborative history widget for Figma Design and FigJam. The source is generic: no organization-specific IDs, endpoints, or design files are embedded.
 
 ## What the technical prototype includes
