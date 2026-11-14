@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coreon History Log</title>
+  <style>
+    :root { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--figma-color-bg, #fff); color: var(--figma-color-text, #1b1e23); }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 10px; }
+    h1 { font-size: 17px; line-height: 24px; margin: 0; font-weight: 650; }
+    .secondary { color: var(--figma-color-text-secondary, #767985); }
+    .tiny { font-size: 11px; }
+    nav { display: flex; gap: 3px; padding: 0 20px 12px; border-bottom: 1px solid var(--figma-color-border, #e6e7eb); }
+    nav button { border-radius: 7px; padding: 9px 12px; color: var(--figma-color-text-secondary, #697080); }
+    nav button.active { background: var(--figma-color-bg-secondary, #f1f2f5); color: var(--figma-color-text, #17191d); font-weight: 650; }
+    button { cursor: pointer; font: inherit; border: 0; background: transparent; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--figma-color-border-brand, #386cf5); outline-offset: 2px; }
+    main { padding: 17px 20px 22px; }
+    label { display: block; font-size: 12px; font-weight: 600; margin: 0 0 8px; }
+    textarea, input, select { color: inherit; font: inherit; width: 100%; border-radius: 7px; padding: 11px 12px; border: 1px solid var(--figma-color-border, #dadee4); background: var(--figma-color-bg, #fff); }
+    textarea { resize: vertical; min-height: 134px; line-height: 1.5; }
+    #editText { min-height: 150px; }
+    .form-row { margin-bottom: 16px; }
+    .hint { font-size: 11px; line-height: 1.5; margin-top: 8px; color: var(--figma-color-text-secondary, #6f737e); }
+    .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; align-items: center; }
+    .primary { padding: 10px 14px; background: var(--figma-color-bg-brand, #2469e8); color: var(--figma-color-text-onbrand, white); border-radius: 7px; font-weight: 650; }
+    .secondary-btn { padding: 10px 12px; border: 1px solid var(--figma-color-border, #e3e4e8); border-radius: 7px; }
+    .primary:disabled { opacity: .45; cursor: default; }
+    #error { min-height: 17px; font-size: 12px; color: var(--figma-color-text-danger, #c93635); margin-top: 7px; }
+    .filter { display: flex; gap: 8px; margin-bottom: 13px; }
+    .filter input { flex: 1; min-width: 0; }
+    .filter select { width: 125px; }
+    .entry { padding: 14px 0; border-bottom: 1px solid var(--figma-color-border, #e6e7eb); }
+    .meta { display: flex; align-items: center; gap: 7px; line-height: 18px; margin-bottom: 7px; }
+    .author { font-weight: 650; }
+    .tag { font-size: 11px; font-weight: 650; border-radius: 4px; padding: 2px 6px; background: var(--figma-color-bg-secondary, #f1f3f5); }
+    .entry p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; margin: 0; }
+    .edit-link { padding: 0; margin-top: 8px; color: var(--figma-color-text-brand, #2469e8); font-size: 12px; }
+    .handoff { text-align: center; font-weight: 650; padding: 15px 8px; border-block: 1px solid var(--figma-color-border, #e6e7eb); }
+    .footer { display: flex; align-items: center; justify-content: space-between; margin-top: 15px; gap: 10px; }
+    .empty { text-align: center; color: var(--figma-color-text-secondary, #697080); padding: 40px 20px; }
+    #history, #editor { display: none; }
+    #history.active, #editor.active, #newEntry.active { display: block; }
+    #newEntry { display: none; }
+    .footer .secondary-btn { font-size: 12px; }
+    .link { color: var(--figma-color-text-brand, #2469e8); padding: 4px; }
+  </style>
+</head>
+<body>
+  <header><div><h1>История изменений</h1><div class="secondary tiny" id="modeLabel"></div></div><button class="link" id="close" aria-label="Закрыть">Закрыть</button></header>
+  <nav><button id="tabNew" type="button">Новая запись</button><button id="tabHistory" type="button">Вся история</button></nav>
+  <main>
+    <section id="newEntry">
+      <form id="newForm">
+        <div class="form-row" id="categoryRow" hidden><label for="category">Тип изменения</label><select id="category"><option value="added">Added</option><option value="changed" selected>Changed</option><option value="fixed">Fixed</option></select></div>
+        <div class="form-row"><label for="description">Что изменилось?</label><textarea maxlength="5000" required id="description" placeholder="Кратко опишите изменения"></textarea><div class="hint">Автор и дата сохраняются автоматически</div></div>
+        <div class="buttons"><button type="button" class="secondary-btn" id="handoff" hidden>Отметить передачу</button><button class="primary" type="submit" id="save">Добавить запись</button></div>
+      </form>
+    </section>
+    <section id="history"><div class="filter"><input id="search" placeholder="Поиск по истории" aria-label="Поиск по истории" /><select id="typeFilter" aria-label="Фильтр"><option value="all">Все записи</option><option value="added">Added</option><option value="changed">Changed</option><option value="fixed">Fixed</option><option value="handoff">Передано</option></select></div><div id="counter" class="secondary tiny"></div><div id="list"></div><div id="pageFooter" class="footer"></div></section>
+    <section id="editor"><div class="form-row"><label for="editText">Редактирование записи</label><textarea id="editText" maxlength="5000"></textarea></div><div class="buttons"><button class="secondary-btn" id="cancelEdit" type="button">Отмена</button><button class="primary" id="saveEdit" type="button">Сохранить</button></div></section>
+    <div id="error" role="status" aria-live="polite"></div>
+  </main>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  let mode = 'product';
+  let records = [];
+  let page = 0;
+  let editing = null;
+  let currentView = 'new';
+  let submitted = null;
+  const pageSize = 40;
+  const send = (message) => parent.postMessage({ pluginMessage: message }, '*');
+  const tag = (name, className = '', text = '') => {
+    const node = document.createElement(name);
+    if (className) node.className = className;
+    node.textContent = text;
+    return node;
+  };
+  const formatDate = (n) => new Date(n).toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const catLabel = (category) => ({ added: 'Added', changed: 'Changed', fixed: 'Fixed' })[category] || '';
+  function error(message = '') { $('error').textContent = message; }
+  function show(view) {
+    currentView = view;
+    for (const [id, key] of [['newEntry', 'new'], ['history', 'history'], ['editor', 'editor']]) $(id).classList.toggle('active', key === view);
+    $('tabNew').classList.toggle('active', view === 'new');
+    $('tabHistory').classList.toggle('active', view === 'history' || view === 'editor');
+    error('');
+    if (view === 'new') $('description').focus();
+    if (view === 'history') renderList();
+  }
+  function renderList() {
+    const query = $('search').value.trim().toLocaleLowerCase();
+    const filter = $('typeFilter').value;
+    const matching = records.filter(r => (filter === 'all' || (filter === 'handoff' ? r.kind === 'handoff' : r.category === filter)) &&
+      (!query || r.text.toLocaleLowerCase().includes(query) || r.authorName.toLocaleLowerCase().includes(query)));
+    const start = page * pageSize;
+    const shown = matching.slice(start, start + pageSize);
+    const root = $('list');
+    root.replaceChildren();
+    $('counter').textContent = `Найдено: ${matching.length}`;
+    if (!shown.length) root.append(tag('div', 'empty', 'Записей не найдено'));
+    for (const rec of shown) {
+      if (rec.kind === 'handoff') {
+        const handoff = tag('div', 'handoff', `${formatDate(rec.createdAt)} · Передано · ${rec.authorName}`);
+        root.append(handoff);
+        continue;
+      }
+      const card = tag('article', 'entry');
+      const meta = tag('div', 'meta');
+      meta.append(tag('span', 'author', rec.authorName), tag('span', 'secondary tiny', formatDate(rec.createdAt)));
+      if (rec.category) meta.append(tag('span', 'tag', catLabel(rec.category)));
+      card.append(meta, tag('p', '', rec.text));
+      const button = tag('button', 'edit-link', 'Редактировать');
+      button.type = 'button';
+      button.onclick = () => { editing = rec.id; $('editText').value = rec.text; show('editor'); $('editText').focus(); };
+      card.append(button);
+      root.append(card);
+    }
+    const footer = $('pageFooter'); footer.replaceChildren();
+    footer.append(tag('span', 'secondary tiny', `${matching.length ? start + 1 : 0}–${Math.min(start + pageSize, matching.length)} из ${matching.length}`));
+    if (page > 0) {
+      const prev = tag('button', 'secondary-btn', 'Назад'); prev.onclick = () => { page -= 1; renderList(); }; footer.append(prev);
+    }
+    if (start + pageSize < matching.length) {
+      const next = tag('button', 'secondary-btn', 'Дальше'); next.onclick = () => { page += 1; renderList(); }; footer.append(next);
+    }
+  }
+  $('close').onclick = () => send({ type: 'CLOSE' });
+  $('tabNew').onclick = () => show('new');
+  $('tabHistory').onclick = () => show('history');
+  $('search').oninput = () => { page = 0; renderList(); };
+  $('typeFilter').onchange = () => { page = 0; renderList(); };
+  $('newForm').onsubmit = (e) => {
+    e.preventDefault(); error('');
+    const text = $('description').value.trim();
+    if (!text) return error('Добавьте описание изменений');
+    submitted = 'new';
+    send({ type: 'ADD', kind: 'change', text, category: mode === 'ds' ? $('category').value : null });
+  };
+  $('handoff').onclick = () => { submitted = 'handoff'; send({ type: 'ADD', kind: 'handoff', text: 'Передано', category: null }); };
+  $('cancelEdit').onclick = () => show('history');
+  $('saveEdit').onclick = () => {
+    if (!$('editText').value.trim()) return error('Текст записи не может быть пустым');
+    submitted = 'edit'; send({ type: 'EDIT', id: editing, newText: $('editText').value });
+  };
+  window.onmessage = (event) => {
+    const message = event.data && event.data.pluginMessage;
+    if (!message || !message.type) return;
+    if (message.type === 'STATE') {
+      mode = message.mode === 'ds' ? 'ds' : 'product';
+      records = Array.isArray(message.records) ? message.records : [];
+      $('modeLabel').textContent = mode === 'ds' ? 'Дизайн-система' : 'Продуктовые макеты';
+      $('categoryRow').hidden = mode !== 'ds';
+      $('handoff').hidden = mode !== 'ds';
+      $('typeFilter').hidden = mode !== 'ds';
+      if (currentView === 'history') renderList();
+      if (message.panel) show(message.panel === 'history' ? 'history' : 'new');
+    } else if (message.type === 'ERROR') {
+      submitted = null;
+      error(message.message || 'Ошибка сохранения');
+    } else if (message.type === 'SAVED') {
+      const action = submitted; submitted = null;
+      if (action === 'new' || action === 'handoff') { send({ type: 'CLOSE' }); }
+      else if (action === 'edit') { show('history'); }
+    }
+  };
+  send({ type: 'REQUEST_STATE' });
+})();
+</script>
+</body>
+</html>
