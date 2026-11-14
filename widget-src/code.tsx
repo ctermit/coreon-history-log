@@ -15,17 +15,15 @@ function MarkdownText({ source }: { source: string }) {
   const shown = lines.slice(0, MAX_CANVAS_LINES);
   return (
     <AutoLayout direction="vertical" width="fill-parent" spacing={3}>
-      {shown.map((line, lineIndex) => (
-        <Text key={lineIndex} width="fill-parent" fontSize={13} lineHeight={20} fill={COLORS.ink}>
-          {line.prefix}
-          {line.segments.map((segment, i) => segment.kind === 'bold' ? (
-            <Span key={i} fontWeight="bold">{segment.text}</Span>
-          ) : segment.kind === 'link' ? (
-            <Span key={i} href={segment.href} fill={COLORS.accent} textDecoration="underline">{segment.text}</Span>
-          ) : (
-            <Span key={i}>{segment.text}</Span>
-          ))}
-        </Text>
+      {shown.map((line, lineIndex) => widget.h(
+        Text,
+        { key: lineIndex, width: 'fill-parent', fontSize: 13, lineHeight: 20, fill: COLORS.ink },
+        line.prefix,
+        ...line.segments.map((segment, i) => {
+          if (segment.kind === 'bold') return widget.h(Span, { key: i, fontWeight: 'bold' }, segment.text);
+          if (segment.kind === 'link') return widget.h(Span, { key: i, href: segment.href, fill: COLORS.accent, textDecoration: 'underline' }, segment.text);
+          return widget.h(Span, { key: i }, segment.text);
+        }),
       ))}
       {lines.length > MAX_CANVAS_LINES ? (
         <Text fontSize={11} fill={COLORS.muted}>Продолжение — во всей истории</Text>

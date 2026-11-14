@@ -120,9 +120,13 @@ function MarkdownText({ source }) {
     const lines = parseMarkdown(source);
     const shown = lines.slice(0, MAX_CANVAS_LINES);
     return (figma.widget.h(AutoLayout, { direction: "vertical", width: "fill-parent", spacing: 3 },
-        shown.map((line, lineIndex) => (figma.widget.h(Text, { key: lineIndex, width: "fill-parent", fontSize: 13, lineHeight: 20, fill: COLORS.ink },
-            line.prefix,
-            line.segments.map((segment, i) => segment.kind === 'bold' ? (figma.widget.h(Span, { key: i, fontWeight: "bold" }, segment.text)) : segment.kind === 'link' ? (figma.widget.h(Span, { key: i, href: segment.href, fill: COLORS.accent, textDecoration: "underline" }, segment.text)) : (figma.widget.h(Span, { key: i }, segment.text)))))),
+        shown.map((line, lineIndex) => widget.h(Text, { key: lineIndex, width: 'fill-parent', fontSize: 13, lineHeight: 20, fill: COLORS.ink }, line.prefix, ...line.segments.map((segment, i) => {
+            if (segment.kind === 'bold')
+                return widget.h(Span, { key: i, fontWeight: 'bold' }, segment.text);
+            if (segment.kind === 'link')
+                return widget.h(Span, { key: i, href: segment.href, fill: COLORS.accent, textDecoration: 'underline' }, segment.text);
+            return widget.h(Span, { key: i }, segment.text);
+        }))),
         lines.length > MAX_CANVAS_LINES ? (figma.widget.h(Text, { fontSize: 11, fill: COLORS.muted }, "\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0435\u043D\u0438\u0435 \u2014 \u0432\u043E \u0432\u0441\u0435\u0439 \u0438\u0441\u0442\u043E\u0440\u0438\u0438")) : null));
 }
 function FormattingHelp() {
