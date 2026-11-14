@@ -67,6 +67,7 @@ const COLORS = {
     surface: '#F7F8FA', accent: '#2369E8', green: '#237A54', amber: '#946200',
 };
 let currentPanel = null;
+let resolveOpenPanel = null;
 function CoreonHistoryLog() {
     const items = useSyncedMap('history-records-v1');
     const [mode, setMode] = useSyncedState('history-mode-v1', 'product');
@@ -79,8 +80,13 @@ function CoreonHistoryLog() {
     }
     function present(panel) {
         currentPanel = panel;
-        figma.showUI(__html__, { width: 440, height: panel === 'add' ? 390 : 580, title: 'Coreon History Log', themeColors: true });
-        figma.ui.postMessage({ ...snapshot(), panel });
+        // Figma stops a widget after a synchronous click handler. Keep the handler
+        // alive while its iframe is in use (Figma Widgets: Handling User Events).
+        return new Promise((resolve) => {
+            resolveOpenPanel = resolve;
+            figma.showUI(__html__, { width: 440, height: panel === 'add' ? 390 : 580, title: 'Coreon History Log', themeColors: true });
+            figma.ui.postMessage({ ...snapshot(), panel });
+        });
     }
     function saveNew(message) {
         const author = figma.currentUser;
@@ -112,6 +118,9 @@ function CoreonHistoryLog() {
                 else if (message.type === 'CLOSE') {
                     currentPanel = null;
                     figma.ui.close();
+                    const resolve = resolveOpenPanel;
+                    resolveOpenPanel = null;
+                    resolve === null || resolve === void 0 ? void 0 : resolve();
                 }
             }
             catch (error) {
