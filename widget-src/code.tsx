@@ -32,15 +32,21 @@ function MarkdownText({ source }: { source: string }) {
   );
 }
 
-function FormattingHelp() {
+const FORMATTING_TOOLTIP = [
+  'Форматирование',
+  '**текст** — жирный',
+  '[название](https://…) — ссылка',
+  'https://… — автоматическая ссылка',
+  '- пункт — список',
+  '1. пункт — нумерация',
+].join('\n');
+
+function FormattingHint() {
   return (
-    <AutoLayout name="Formatting help" width="fill-parent" direction="vertical" spacing={4} padding={10}
-      fill={COLORS.surface} cornerRadius={7}>
-      <Text fontSize={11} fill={COLORS.ink}>**текст** — жирный</Text>
-      <Text fontSize={11} fill={COLORS.ink}>[название](https://…) — ссылка</Text>
-      <Text fontSize={11} fill={COLORS.ink}>https://… — ссылка автоматически</Text>
-      <Text fontSize={11} fill={COLORS.ink}>- пункт — маркированный список</Text>
-      <Text fontSize={11} fill={COLORS.ink}>1. пункт — нумерованный список</Text>
+    <AutoLayout name="Formatting tooltip" width={20} height={20} cornerRadius={10}
+      stroke={COLORS.muted} strokeWidth={1} horizontalAlignItems="center" verticalAlignItems="center"
+      tooltip={FORMATTING_TOOLTIP}>
+      <Text fontSize={12} fontWeight="bold" fill={COLORS.muted} tooltip={FORMATTING_TOOLTIP}>?</Text>
     </AutoLayout>
   );
 }
@@ -51,11 +57,12 @@ function CoreonHistoryLog() {
   const [displayLimit, setDisplayLimit] = useSyncedState<number>('history-display-limit-v1', 5);
   const [composerOpen, setComposerOpen] = useSyncedState<boolean>('composer-open-v2', false);
   const [draft, setDraft] = useSyncedState<string>('composer-draft-v2', '');
-  const [draftCategory, setDraftCategory] = useSyncedState<ChangeCategory>('composer-category-v2', 'changed');
-  const [composerHelp, setComposerHelp] = useSyncedState<boolean>('composer-help-v2', false);
   const [editingId, setEditingId] = useSyncedState<string | null>('editing-id-v2', null);
   const [editingDraft, setEditingDraft] = useSyncedState<string>('editing-draft-v2', '');
-  const [editingHelp, setEditingHelp] = useSyncedState<boolean>('editing-help-v2', false);
+  const [categoryEditorId, setCategoryEditorId] = useSyncedState<string | null>('category-editor-id-v2', null);
+  // Avoid duplicate commits if Figma reports the same blur event twice before re-render.
+  let composerCommitted = false;
+  let editorCommitted = false;
   const all = recordsForHistory(items.entries().map(([id, item]) => ({ ...item, id })));
   const recent = all.slice(0, LIMIT_OPTIONS.includes(displayLimit) ? displayLimit : 5);
 
@@ -82,36 +89,42 @@ function CoreonHistoryLog() {
     items.set(entry.id, entry);
   }
 
-  function saveComposer() {
-    if (!draft.trim()) return;
-    writeRecord('change', draft, draftCategory);
+  function commitComposer(characters: string) {
+    if (!composerOpen || composerCommitted) return;
+    composerCommitted = true;
+    const cleaned = cleanText(characters);
+    // Clicking away from an empty input abandons the draft without creating a record.
+    if (cleaned) writeRecord('change', cleaned, 'changed');
     setDraft('');
-    setDraftCategory('changed');
     setComposerOpen(false);
-    setComposerHelp(false);
-  }
-
-  function markHandoff() {
-    writeRecord('handoff', 'Передано', null);
-    setDraft('');
-    setDraftCategory('changed');
-    setComposerOpen(false);
-    setComposerHelp(false);
   }
 
   function startEdit(entry: HistoryRecord) {
     setEditingId(entry.id);
     setEditingDraft(entry.text);
-    setEditingHelp(false);
+    setCategoryEditorId(null);
   }
 
-  function saveEdit(id: string) {
+  function commitEdit(id: string, characters: string) {
+    if (editorCommitted) return;
+    editorCommitted = true;
     const old = items.get(id);
-    if (!old || !editingDraft.trim()) return;
-    items.set(id, editHistoryRecord(old, editingDraft, Date.now()));
+    const cleaned = cleanText(characters);
+    if (old && cleaned && old.text !== cleaned) {
+      items.set(id, editHistoryRecord(old, cleaned, Date.now()));
+    }
+    // Escape/no change or cleared input never overwrites the original record.
     setEditingId(null);
     setEditingDraft('');
-    setEditingHelp(false);
+  }
+
+  function chooseCategory(entry: HistoryRecord, category: ChangeCategory) {
+    if (entry.kind !== 'change') return;
+    const old = items.get(entry.id);
+    if (old && old.kind === 'change' && effectiveCategory(old) !== category) {
+      items.set(entry.id, { ...old, category, updatedAt: Date.now() });
+    }
+    setCategoryEditorId(null);
   }
 
   useEffect(() => {
@@ -122,6 +135,12 @@ function CoreonHistoryLog() {
           if (!old) throw new Error('Запись не найдена');
           items.set(message.id, editHistoryRecord(old, message.newText || '', Date.now()));
           figma.ui.postMessage({ type: 'SAVED' });
+          figma.ui.postMessage(snapshot());
+        } else if (message.type === 'DELETE' && typeof message.id === 'string') {
+          const old = items.get(message.id);
+          if (!old) throw new Error('Запись уже удалена или не найдена');
+          items.delete(message.id);
+          figma.ui.postMessage({ type: 'DELETED', id: message.id });
           figma.ui.postMessage(snapshot());
         } else if (message.type === 'REQUEST_STATE') {
           figma.ui.postMessage(snapshot());
@@ -159,50 +178,26 @@ function CoreonHistoryLog() {
           <Text fontSize={17} fontWeight="bold" fill={COLORS.ink}>История изменений</Text>
           <Text fontSize={11} fill={COLORS.muted}>{all.length} записей</Text>
         </AutoLayout>
-        <AutoLayout name="Toggle composer" onClick={() => setComposerOpen(!composerOpen)}
+        <AutoLayout name="Toggle composer" onClick={() => { if (!composerOpen) setComposerOpen(true); }}
           padding={{ horizontal: 11, vertical: 8 }} fill={COLORS.accent} cornerRadius={7}
           hoverStyle={{ fill: '#1856C3' }}>
-          <Text fill={COLORS.white} fontSize={13} fontWeight="bold">{composerOpen ? 'Закрыть' : '+ Добавить'}</Text>
+          <Text fill={COLORS.white} fontSize={13} fontWeight="bold">+ Добавить</Text>
         </AutoLayout>
       </AutoLayout>
 
       {composerOpen ? (
-        <AutoLayout name="Inline composer" direction="vertical" width="fill-parent" spacing={10}
-          padding={12} fill={COLORS.surface} cornerRadius={8}>
+        <AutoLayout name="Inline composer" direction="vertical" width="fill-parent" spacing={6} padding={{ bottom: 8 }}>
+          <AutoLayout width="fill-parent" direction="horizontal" verticalAlignItems="center" spacing={8}>
+            <Text fontSize={11} fill={COLORS.muted}>Новая запись · Changed</Text>
+            <AutoLayout width="fill-parent" />
+            {FormattingHint()}
+          </AutoLayout>
           <Input name="Новая запись" value={draft} inputBehavior="multiline" width="fill-parent"
             fontSize={13} lineHeight={20} fill={COLORS.ink}
-            placeholder="Что изменилось? Markdown поддерживается"
+            placeholder="Что изменилось?"
             placeholderProps={{ fill: COLORS.muted }}
-            inputFrameProps={{ padding: 10, fill: COLORS.white, stroke: COLORS.subtle, cornerRadius: 7 }}
-            onTextEditEnd={(event) => setDraft(event.characters.slice(0, MAX_TEXT_LENGTH))} />
-          <AutoLayout direction="horizontal" width="fill-parent" spacing={6}>
-            {(['changed', 'added', 'fixed'] as ChangeCategory[]).map((category) => (
-              <AutoLayout key={category} name={`Category ${category}`} onClick={() => setDraftCategory(category)}
-                padding={{ horizontal: 9, vertical: 6 }} cornerRadius={6}
-                fill={draftCategory === category ? '#DBE8FF' : COLORS.white}
-                stroke={draftCategory === category ? COLORS.accent : COLORS.subtle} strokeWidth={1}>
-                <Text fontSize={11} fill={draftCategory === category ? COLORS.accent : COLORS.muted}
-                  fontWeight={draftCategory === category ? 'bold' : 'normal'}>{categoryLabel(category)}</Text>
-              </AutoLayout>
-            ))}
-          </AutoLayout>
-          <AutoLayout onClick={() => setComposerHelp(!composerHelp)}>
-            <Text fontSize={11} fill={COLORS.accent}>? Форматирование</Text>
-          </AutoLayout>
-          {composerHelp ? FormattingHelp() : null}
-          <AutoLayout direction="horizontal" width="fill-parent" spacing={8} verticalAlignItems="center">
-            <AutoLayout name="Handoff" onClick={markHandoff} padding={{ horizontal: 8, vertical: 8 }}>
-              <Text fontSize={11} fill={COLORS.muted}>Передано</Text>
-            </AutoLayout>
-            <AutoLayout width="fill-parent" />
-            <AutoLayout name="Cancel composer" onClick={() => { setComposerOpen(false); setDraft(''); setComposerHelp(false); }} padding={8}>
-              <Text fontSize={12} fill={COLORS.muted}>Отмена</Text>
-            </AutoLayout>
-            <AutoLayout name="Save composer" onClick={saveComposer} padding={{ horizontal: 11, vertical: 8 }}
-              fill={draft.trim() ? COLORS.accent : '#A4B9DB'} cornerRadius={7}>
-              <Text fontSize={12} fontWeight="bold" fill={COLORS.white}>Сохранить</Text>
-            </AutoLayout>
-          </AutoLayout>
+            inputFrameProps={{ padding: 0, fill: COLORS.white }}
+            onTextEditEnd={(event) => commitComposer(event.characters)} />
         </AutoLayout>
       ) : null}
 
@@ -213,35 +208,50 @@ function CoreonHistoryLog() {
       ) : recent.map((entry) => (
         <AutoLayout key={entry.id} name="History entry" direction="vertical" width="fill-parent"
           spacing={7} padding={{ top: 11, bottom: 13 }}>
-          <AutoLayout direction="horizontal" width="fill-parent" verticalAlignItems="center" spacing={8}>
-            <Text fontWeight="bold" fontSize={12} fill={COLORS.ink}>{entry.authorName}</Text>
-            <Text fontSize={11} fill={COLORS.muted}>{formatDateTime(entry.createdAt)}</Text>
-            {entry.kind === 'handoff' ? (
+          {entry.kind === 'handoff' ? (
+            <AutoLayout direction="horizontal" width="fill-parent" verticalAlignItems="center" spacing={8}>
+              <Text fontWeight="bold" fontSize={12} fill={COLORS.ink}>{entry.authorName}</Text>
+              <Text fontSize={11} fill={COLORS.muted}>{formatDateTime(entry.createdAt)}</Text>
               <Text fontSize={11} fill={COLORS.green} fontWeight="bold">Передано</Text>
-            ) : (effectiveCategory(entry) !== 'changed' ? (
-              <Text fontSize={11} fill={entry.category === 'added' ? COLORS.green : COLORS.amber} fontWeight="bold">
-                {categoryLabel(effectiveCategory(entry))}
+            </AutoLayout>
+          ) : (
+            <AutoLayout name="Category trigger" direction="horizontal" width="fill-parent" verticalAlignItems="center"
+              spacing={8} onClick={() => setCategoryEditorId(categoryEditorId === entry.id ? null : entry.id)}>
+              <Text fontWeight="bold" fontSize={12} fill={COLORS.ink}>{entry.authorName}</Text>
+              <Text fontSize={11} fill={COLORS.muted}>{formatDateTime(entry.createdAt)}</Text>
+              <AutoLayout width="fill-parent" />
+              <Text name="Category hover action" fontSize={11}
+                fill={effectiveCategory(entry) === 'added' ? COLORS.green : effectiveCategory(entry) === 'fixed' ? COLORS.amber : COLORS.accent}
+                opacity={effectiveCategory(entry) === 'changed' ? 0 : 1} hoverStyle={{ opacity: 1 }}
+                tooltip="Изменить категорию">
+                {effectiveCategory(entry) === 'changed' ? '+ Категория' : categoryLabel(effectiveCategory(entry))}
               </Text>
-            ) : null)}
-          </AutoLayout>
+            </AutoLayout>
+          )}
+          {categoryEditorId === entry.id && entry.kind === 'change' ? (
+            <AutoLayout name="Category chooser" direction="horizontal" spacing={6}>
+              {(['changed', 'added', 'fixed'] as ChangeCategory[]).map(category => (
+                <AutoLayout key={category} name={`Choose category ${category}`}
+                  onClick={() => chooseCategory(entry, category)} padding={{ horizontal: 8, vertical: 5 }}
+                  cornerRadius={5} fill={effectiveCategory(entry) === category ? '#DBE8FF' : COLORS.surface}>
+                  <Text fontSize={11} fill={COLORS.ink}>{categoryLabel(category)}</Text>
+                </AutoLayout>
+              ))}
+            </AutoLayout>
+          ) : null}
           {entry.kind === 'handoff' ? (
             <Text fontSize={13} fill={COLORS.ink}>{entry.text}</Text>
           ) : editingId === entry.id ? (
-            <AutoLayout name="Inline editor" direction="vertical" width="fill-parent" spacing={8}>
+            <AutoLayout name="Inline editor" direction="vertical" width="fill-parent" spacing={4}>
+              <AutoLayout direction="horizontal" width="fill-parent" verticalAlignItems="center">
+                <Text fontSize={11} fill={COLORS.muted}>Редактирование · сохранение при выходе из поля</Text>
+                <AutoLayout width="fill-parent" />
+                {FormattingHint()}
+              </AutoLayout>
               <Input name="Редактирование записи" value={editingDraft} inputBehavior="multiline"
                 width="fill-parent" fontSize={13} lineHeight={20} fill={COLORS.ink}
-                inputFrameProps={{ padding: 10, fill: COLORS.surface, stroke: COLORS.subtle, cornerRadius: 7 }}
-                onTextEditEnd={(event) => setEditingDraft(event.characters.slice(0, MAX_TEXT_LENGTH))} />
-              <AutoLayout onClick={() => setEditingHelp(!editingHelp)}><Text fontSize={11} fill={COLORS.accent}>? Форматирование</Text></AutoLayout>
-              {editingHelp ? FormattingHelp() : null}
-              <AutoLayout direction="horizontal" spacing={12}>
-                <AutoLayout name="Save inline edit" onClick={() => saveEdit(entry.id)}>
-                  <Text fontSize={12} fontWeight="bold" fill={COLORS.accent}>Сохранить</Text>
-                </AutoLayout>
-                <AutoLayout name="Cancel inline edit" onClick={() => setEditingId(null)}>
-                  <Text fontSize={12} fill={COLORS.muted}>Отмена</Text>
-                </AutoLayout>
-              </AutoLayout>
+                inputFrameProps={{ padding: 0, fill: COLORS.white }}
+                onTextEditEnd={(event) => commitEdit(entry.id, event.characters)} />
             </AutoLayout>
           ) : (
             <AutoLayout width="fill-parent" spacing={6} direction="vertical">

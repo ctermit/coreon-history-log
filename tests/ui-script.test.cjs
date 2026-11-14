@@ -52,3 +52,47 @@ test('HTML renders unsupported dangerous link syntax as inert text',()=>{
   const md=fake.get('list').children[0].children[1];
   assert.equal(md.children[0].children.filter(x=>x.tagName==='A').length,0);
 });
+
+
+test('history delete requires a confirmation and sends only one DELETE for the target', () => {
+  const f = setup();
+  const records = [{id:'old',text:'Legacy handoff',authorName:'Designer',createdAt:1000,kind:'handoff',category:null},
+    {id:'keep',text:'Keep note',authorName:'Designer',createdAt:999,kind:'change',category:'added'}];
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records}}});
+  const edit = f.get('list').children[0].children.at(-1);
+  assert.equal(edit.textContent,'Редактировать');
+  edit.onclick();
+  assert.equal(f.get('editText').value,'Legacy handoff');
+  f.get('deleteEntry').onpointerdown();
+  f.get('editText').onblur();
+  assert.equal(f.sent.filter(x => x.pluginMessage.type==='EDIT').length, 0);
+  f.get('deleteEntry').onclick();
+  assert.equal(f.get('deleteConfirmation').hidden,false);
+  assert.equal(f.sent.filter(x => x.pluginMessage.type==='DELETE').length, 0);
+  f.get('confirmDelete').onclick();
+  f.get('confirmDelete').onclick();
+  assert.equal(f.sent.filter(x => x.pluginMessage.type==='DELETE').length, 1);
+  assert.equal(f.sent.at(-1).pluginMessage.id,'old');
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'DELETED',id:'old'}}});
+  assert.equal(f.get('deleteConfirmation').hidden,true);
+});
+
+test('HTML history auto-saves changed text on blur, but skips unchanged/blank edits', () => {
+  const f=setup();
+  const rec={id:'a',text:'Original',authorName:'Designer',createdAt:10,kind:'change',category:'changed'};
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records:[rec]}}});
+  f.get('list').children[0].children.at(-1).onclick();
+  f.get('editText').value='Changed';
+  f.get('editText').onblur();
+  assert.equal(f.sent.at(-1).pluginMessage.type,'EDIT');
+  assert.equal(f.sent.at(-1).pluginMessage.newText,'Changed');
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'SAVED'}}});
+  f.get('list').children[0].children.at(-1).onclick();
+  const edits=f.sent.filter(x=>x.pluginMessage.type==='EDIT').length;
+  f.get('editText').onblur(); // unchanged draft
+  assert.equal(f.sent.filter(x=>x.pluginMessage.type==='EDIT').length,edits);
+  f.get('list').children[0].children.at(-1).onclick();
+  f.get('editText').value='   ';
+  f.get('editText').onblur();
+  assert.equal(f.sent.filter(x=>x.pluginMessage.type==='EDIT').length,edits);
+});

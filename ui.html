@@ -35,7 +35,16 @@
     .empty { text-align: center; color: var(--figma-color-text-secondary, #697080); padding: 40px 20px; }
     .secondary-btn { padding: 9px 12px; border: 1px solid var(--figma-color-border, #e3e4e8); border-radius: 7px; }
     .primary { padding: 10px 14px; background: var(--figma-color-bg-brand, #2469e8); color: var(--figma-color-text-onbrand, white); border-radius: 7px; font-weight: 650; }
-    .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+    .buttons { display: flex; justify-content: space-between; gap: 8px; margin-top: 14px; }
+    .editor-header { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px; }
+    .editor-header label { margin:0; }
+    .help-icon { width:20px; height:20px; border-radius:50%; border:1px solid var(--figma-color-border, #b9bdc4); font-size:12px; color:var(--figma-color-text-secondary,#697080); }
+    .danger { color:var(--figma-color-text-danger,#c93635); padding:9px 0; }
+    .danger-primary { background:var(--figma-color-bg-danger,#b91c1c); color:white; padding:10px 14px; border-radius:7px; font-weight:650; }
+    #deleteConfirmation { margin-top:16px; padding:14px; border:1px solid var(--figma-color-border-danger,#e9b2b2); border-radius:8px; }
+    #deleteConfirmation[hidden] { display:none; }
+    #deleteConfirmation p { line-height:1.5; margin:6px 0; }
+    #deleteConfirmation .buttons { justify-content:flex-end; }
     #editor { display: none; }
     #editor.active { display: block; }
     #history.hidden { display: none; }
@@ -64,15 +73,16 @@
       <div id="counter" class="secondary tiny"></div><div id="list"></div><div id="pageFooter" class="footer"></div>
     </section>
     <section id="editor">
-      <label for="editText">Редактирование записи</label><textarea id="editText" maxlength="5000"></textarea>
-      <details><summary>Форматирование</summary>
-        <p><code>**текст**</code> — жирный</p>
-        <p><code>[название](https://…)</code> — ссылка</p>
-        <p><code>https://…</code> — ссылка автоматически</p>
-        <p><code>- пункт</code> — маркированный список</p>
-        <p><code>1. пункт</code> — нумерованный список</p>
-      </details>
-      <div class="buttons"><button id="cancelEdit" class="secondary-btn" type="button">Отмена</button><button id="saveEdit" class="primary" type="button">Сохранить</button></div>
+      <div class="editor-header"><label for="editText">Редактирование записи</label><button type="button" class="help-icon" aria-label="Подсказка по форматированию"
+        title="**текст** — жирный&#10;[название](https://…) — ссылка&#10;https://… — автоматическая ссылка&#10;- пункт — список&#10;1. пункт — нумерация">?</button></div>
+      <textarea id="editText" maxlength="5000" aria-describedby="saveHint"></textarea>
+      <div class="secondary tiny" id="saveHint">Изменения сохраняются при выходе из поля</div>
+      <div class="buttons"><button id="deleteEntry" class="danger" type="button">Удалить запись</button><button id="cancelEdit" class="secondary-btn" type="button">Отмена</button></div>
+      <div id="deleteConfirmation" hidden>
+        <strong>Удалить эту запись?</strong>
+        <p class="secondary">Действие нельзя отменить через журнал. Другие записи останутся без изменений.</p>
+        <div class="buttons"><button id="cancelDelete" class="secondary-btn" type="button">Отмена</button><button id="confirmDelete" class="danger-primary" type="button">Удалить</button></div>
+      </div>
     </section>
     <div id="error" role="status" aria-live="polite"></div>
   </main>
@@ -84,6 +94,9 @@
   let page = 0;
   let editing = null;
   let submitted = false;
+  let originalText = '';
+  let preventBlurSave = false;
+  let pendingDelete = false;
   const pageSize = 40;
   const send = (message) => parent.postMessage({ pluginMessage: message }, '*');
   const tag = (name, className = '', text = '') => {
@@ -101,6 +114,7 @@
   function showEditor(visible) {
     $('history').classList.toggle('hidden', visible);
     $('editor').classList.toggle('active', visible);
+    $('deleteConfirmation').hidden = true;
     error('');
   }
   function appendInline(target, raw) {
@@ -164,10 +178,19 @@
       card.append(meta);
       if (rec.kind === 'handoff') card.append(tag('div', 'handoff', rec.text));
       else card.append(renderMarkdown(rec.text));
-      if (rec.kind !== 'handoff') {
+      {
         const button = tag('button', 'edit-link', 'Редактировать');
         button.type = 'button';
-        button.onclick = () => { editing = rec.id; $('editText').value = rec.text; showEditor(true); $('editText').focus(); };
+        button.onclick = () => {
+          editing = rec.id;
+          originalText = rec.text;
+          preventBlurSave = false;
+          pendingDelete = false;
+          submitted = false;
+          $('editText').value = rec.text;
+          showEditor(true);
+          $('editText').focus();
+        };
         card.append(button);
       }
       root.append(card);
@@ -184,11 +207,50 @@
   $('close').onclick = () => send({ type: 'CLOSE' });
   $('search').oninput = () => { page = 0; renderList(); };
   $('typeFilter').onchange = () => { page = 0; renderList(); };
-  $('cancelEdit').onclick = () => showEditor(false);
-  $('saveEdit').onclick = () => {
-    if (!$('editText').value.trim()) return error('Текст записи не может быть пустым');
+  function commitHistoryEdit() {
+    if (preventBlurSave || pendingDelete || submitted || editing === null) return;
+    const text = $('editText').value.trim();
+    if (!text) { error('Текст записи не может быть пустым'); return; }
+    if (text === originalText) { showEditor(false); editing = null; return; }
     submitted = true;
-    send({ type: 'EDIT', id: editing, newText: $('editText').value });
+    send({ type: 'EDIT', id: editing, newText: text });
+  }
+  $('editText').onblur = commitHistoryEdit;
+  $('editText').onkeydown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      preventBlurSave = true;
+      editing = null;
+      editing = null;
+      showEditor(false);
+    } else if (message.type === 'DELETED' && pendingDelete && message.id === editing) {
+      pendingDelete = false;
+      editing = null;
+      showEditor(false);
+    }
+  };
+  // Prevent blur-autosave before pressing Cancel or Delete in the HTML editor.
+  $('cancelEdit').onpointerdown = () => { preventBlurSave = true; };
+  $('cancelEdit').onclick = () => {
+    preventBlurSave = true;
+    editing = null;
+    showEditor(false);
+  };
+  $('deleteEntry').onpointerdown = () => { preventBlurSave = true; };
+  $('deleteEntry').onclick = () => {
+    preventBlurSave = true;
+    $('deleteConfirmation').hidden = false;
+  };
+  $('cancelDelete').onclick = () => {
+    $('deleteConfirmation').hidden = true;
+    preventBlurSave = false;
+    $('editText').focus();
+  };
+  $('confirmDelete').onclick = () => {
+    if (editing === null || pendingDelete) return;
+    preventBlurSave = true;
+    pendingDelete = true;
+    send({ type: 'DELETE', id: editing });
   };
   window.onmessage = (event) => {
     const message = event.data && event.data.pluginMessage;
@@ -197,10 +259,15 @@
       records = Array.isArray(message.records) ? message.records : [];
       renderList();
     } else if (message.type === 'ERROR') {
-      submitted = false;
+      submitted = false; pendingDelete = false;
       error(message.message || 'Ошибка сохранения');
     } else if (message.type === 'SAVED' && submitted) {
       submitted = false;
+      editing = null;
+      showEditor(false);
+    } else if (message.type === 'DELETED' && pendingDelete && message.id === editing) {
+      pendingDelete = false;
+      editing = null;
       showEditor(false);
     }
   };

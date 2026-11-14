@@ -20,7 +20,7 @@ function setupWidget(count = 0) {
   const widget = {
     h: (type, props, ...children) => ({ type, props: props || {}, children: children.flat(Infinity).filter(x => x != null) }),
     AutoLayout: 'AutoLayout', Text: 'Text', Span: 'Span', Input: 'Input', Line: 'Line',
-    useSyncedMap: () => ({ entries: () => Array.from(records.entries()), get: id => records.get(id), set: (id, value) => records.set(id, value) }),
+    useSyncedMap: () => ({ entries: () => Array.from(records.entries()), get: id => records.get(id), set: (id, value) => records.set(id, value), delete: id => records.delete(id) }),
     useSyncedState: (key, initial) => {
       if (!state.has(key)) state.set(key, initial);
       return [state.get(key), value => state.set(key, value)];
@@ -57,16 +57,20 @@ test('500 mixed v1 records render five (not 500), without dropping either old mo
   assert.equal(f.state.has('history-mode-v1'), false, 'mode removed from UI');
 });
 
-test('inline composer saves a Changed record without opening an iframe, preserves old records', () => {
+test('inline composer auto-saves Changed on blur and closes with no separate Save/Close/Handoff controls', () => {
   const f = setupWidget(20);
-  named(f.render(), 'Toggle composer').props.onClick();
+  const add = named(f.render(), 'Toggle composer');
+  assert.equal(add.children[0].children[0], '+ Добавить');
+  add.props.onClick();
   assert.equal(f.state.get('composer-open-v2'), true);
-  assert.equal(f.activity.opened.length, 0);
   let t = f.render();
-  named(t, 'Новая запись').props.onTextEditEnd({ characters: 'Новая **запись**\n- пункт' });
-  assert.equal(f.state.get('composer-draft-v2').includes('**'), true);
-  t = f.render();
-  named(t, 'Save composer').props.onClick();
+  assert.equal(findAll(t, x => x.props?.name === 'Save composer').length, 0);
+  assert.equal(findAll(t, x => x.props?.name === 'Handoff').length, 0);
+  assert.equal(findAll(t, x => x.props?.name === 'Category fixed').length, 0);
+  assert.equal(f.activity.opened.length, 0);
+  const input = named(t, 'Новая запись');
+  input.props.onTextEditEnd({ characters: 'Новая **запись**\n- пункт' });
+  input.props.onTextEditEnd({ characters: 'Новая **запись**\n- пункт' }); // double-event prevention
   assert.equal(f.records.size, 21);
   const entry = [...f.records.values()].find(r => r.schemaVersion === 2);
   assert.equal(entry.authorName, 'Алексей');
@@ -75,17 +79,36 @@ test('inline composer saves a Changed record without opening an iframe, preserve
   assert.equal(f.state.get('composer-open-v2'), false);
 });
 
-test('can select Added/Fixed categories and create a separate handoff event', () => {
-  const f = setupWidget();
+test('empty composer blur does not create a record or leave the composer open', () => {
+  const f = setupWidget(1);
   named(f.render(), 'Toggle composer').props.onClick();
-  named(f.render(), 'Category fixed').props.onClick();
-  named(f.render(), 'Новая запись').props.onTextEditEnd({ characters: 'Исправили отступы' });
-  named(f.render(), 'Save composer').props.onClick();
-  assert.equal([...f.records.values()][0].category, 'fixed');
-  named(f.render(), 'Toggle composer').props.onClick();
-  named(f.render(), 'Handoff').props.onClick();
-  assert.equal([...f.records.values()].length, 2);
-  assert.equal([...f.records.values()].filter(r => r.kind === 'handoff').length, 1);
+  named(f.render(), 'Новая запись').props.onTextEditEnd({ characters: '   ' });
+  assert.equal(f.records.size, 1);
+  assert.equal(f.state.get('composer-open-v2'), false);
+});
+
+test('hover category selector edits only target record and does not mutate existing v1 metadata', () => {
+  const f = setupWidget(2);
+  const t = f.render();
+  assert.equal(findAll(t, x => x.props?.name === 'Category hover action').length, 2);
+  const changed = f.records.get('id-0');
+  const headers = findAll(t, x => x.props?.name === 'Category trigger');
+  // Newest record is id-1. Open selector for id-0 (the older record).
+  headers[1].props.onClick();
+  assert.ok(named(f.render(), 'Category chooser'));
+  named(f.render(), 'Choose category fixed').props.onClick();
+  const updated = f.records.get('id-0');
+  assert.equal(updated.category, 'fixed');
+  assert.equal(updated.schemaVersion, 1);
+  assert.equal(updated.createdAt, changed.createdAt);
+  assert.equal(updated.authorName, changed.authorName);
+  assert.equal(f.records.get('id-1').category, 'added');
+  assert.equal(f.state.get('category-editor-id-v2'), null);
+  // Return category to default; it should be hidden on the canvas.
+  const header = findAll(f.render(), x => x.props?.name === 'Category trigger')[1];
+  header.props.onClick();
+  named(f.render(), 'Choose category changed').props.onClick();
+  assert.equal(f.records.get('id-0').category, 'changed');
 });
 
 test('saved Markdown renders as Figma Span rich text and clickable link', () => {
@@ -97,17 +120,34 @@ test('saved Markdown renders as Figma Span rich text and clickable link', () => 
   assert.ok(findAll(t, x => x.type === 'Text').some(x => x.children.some(c => typeof c === 'string' && c.includes('2026')) === false));
 });
 
-test('on-canvas inline editing works with Markdown and preserves timestamp', () => {
+test('on-canvas inline editing auto-saves Markdown on blur preserving creation metadata and avoiding no-op edits', () => {
   const f = setupWidget(1);
   const old = f.records.get('id-0');
   named(f.render(), 'Edit on canvas').props.onClick();
-  const t = f.render();
-  named(t, 'Редактирование записи').props.onTextEditEnd({ characters: 'Обновлено **важное**' });
-  named(f.render(), 'Save inline edit').props.onClick();
+  let t = f.render();
+  assert.equal(findAll(t, x => x.props?.name === 'Save inline edit').length, 0);
+  const input = named(t, 'Редактирование записи');
+  input.props.onTextEditEnd({ characters: 'Обновлено **важное**' });
   const updated = f.records.get('id-0');
   assert.equal(updated.text, 'Обновлено **важное**');
   assert.equal(updated.createdAt, old.createdAt);
   assert.equal(f.records.size, 1);
+  assert.equal(f.state.get('editing-id-v2'), null);
+  named(f.render(), 'Edit on canvas').props.onClick();
+  t = f.render();
+  named(t, 'Редактирование записи').props.onTextEditEnd({ characters: updated.text });
+  assert.equal(f.records.get('id-0').updatedAt, updated.updatedAt);
+});
+
+test('blank edit and Escape-like unchanged text never erase an existing record', () => {
+  const f = setupWidget(1);
+  const before = f.records.get('id-0');
+  named(f.render(), 'Edit on canvas').props.onClick();
+  named(f.render(), 'Редактирование записи').props.onTextEditEnd({ characters: '    ' });
+  assert.deepEqual(f.records.get('id-0'), before);
+  named(f.render(), 'Edit on canvas').props.onClick();
+  named(f.render(), 'Редактирование записи').props.onTextEditEnd({ characters: before.text });
+  assert.deepEqual(f.records.get('id-0'), before);
 });
 
 test('full history opens a retained iframe and receives all unified records', async () => {
@@ -128,13 +168,31 @@ test('full history opens a retained iframe and receives all unified records', as
   assert.equal(f.activity.closed, 1);
 });
 
-test('formatting help can be opened in both composer and inline editor', () => {
+test('formatting is a tooltip next to both composer and inline edit, not an expanded block', () => {
   const f = setupWidget(1);
   named(f.render(), 'Toggle composer').props.onClick();
-  const help = findAll(f.render(), n => n.type === 'AutoLayout' && n.children.some(c => c?.type === 'Text' && c.children.includes('? Форматирование')));
-  assert.ok(help.length > 0);
-  help[0].props.onClick();
-  assert.ok(findAll(f.render(), n => n.props?.name === 'Formatting help').length > 0);
-  named(f.render(), 'Edit on canvas').props.onClick();
-  assert.ok(named(f.render(), 'Inline editor'));
+  let t = f.render();
+  const helps = findAll(t, n => n.props?.name === 'Formatting tooltip');
+  assert.equal(helps.length, 1);
+  assert.ok(helps[0].props.tooltip.includes('**текст**'));
+  assert.equal(findAll(t, n => n.props?.name === 'Formatting help').length, 0);
+  named(t, 'Edit on canvas').props.onClick();
+  t = f.render();
+  assert.ok(named(t, 'Inline editor'));
+  assert.equal(findAll(t, n => n.props?.name === 'Formatting tooltip').length, 2);
+});
+
+test('full history DELETE removes only requested entry and refreshes UI snapshot', () => {
+  const f = setupWidget(4);
+  named(f.render(), 'Open history').props.onClick();
+  f.ui.onmessage({ type: 'DELETE', id: 'id-2' });
+  assert.equal(f.records.size, 3);
+  assert.equal(f.records.has('id-2'), false);
+  assert.equal(f.records.has('id-1'), true);
+  assert.equal(f.records.has('id-3'), true);
+  assert.equal(f.activity.uiMessages.some(m => m.type === 'DELETED' && m.id === 'id-2'), true);
+  assert.equal(f.activity.uiMessages.filter(m => m.type === 'STATE').at(-1).records.length, 3);
+  f.ui.onmessage({ type: 'DELETE', id: 'missing' });
+  assert.equal(f.records.size, 3);
+  assert.equal(f.activity.uiMessages.at(-1).type, 'ERROR');
 });

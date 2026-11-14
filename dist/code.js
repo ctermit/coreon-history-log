@@ -129,13 +129,17 @@ function MarkdownText({ source }) {
         }))),
         lines.length > MAX_CANVAS_LINES ? (figma.widget.h(Text, { fontSize: 11, fill: COLORS.muted }, "\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0435\u043D\u0438\u0435 \u2014 \u0432\u043E \u0432\u0441\u0435\u0439 \u0438\u0441\u0442\u043E\u0440\u0438\u0438")) : null));
 }
-function FormattingHelp() {
-    return (figma.widget.h(AutoLayout, { name: "Formatting help", width: "fill-parent", direction: "vertical", spacing: 4, padding: 10, fill: COLORS.surface, cornerRadius: 7 },
-        figma.widget.h(Text, { fontSize: 11, fill: COLORS.ink }, "**\u0442\u0435\u043A\u0441\u0442** \u2014 \u0436\u0438\u0440\u043D\u044B\u0439"),
-        figma.widget.h(Text, { fontSize: 11, fill: COLORS.ink }, "[\u043D\u0430\u0437\u0432\u0430\u043D\u0438\u0435](https://\u2026) \u2014 \u0441\u0441\u044B\u043B\u043A\u0430"),
-        figma.widget.h(Text, { fontSize: 11, fill: COLORS.ink }, "https://\u2026 \u2014 \u0441\u0441\u044B\u043B\u043A\u0430 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438"),
-        figma.widget.h(Text, { fontSize: 11, fill: COLORS.ink }, "- \u043F\u0443\u043D\u043A\u0442 \u2014 \u043C\u0430\u0440\u043A\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0441\u043F\u0438\u0441\u043E\u043A"),
-        figma.widget.h(Text, { fontSize: 11, fill: COLORS.ink }, "1. \u043F\u0443\u043D\u043A\u0442 \u2014 \u043D\u0443\u043C\u0435\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0441\u043F\u0438\u0441\u043E\u043A")));
+const FORMATTING_TOOLTIP = [
+    'Форматирование',
+    '**текст** — жирный',
+    '[название](https://…) — ссылка',
+    'https://… — автоматическая ссылка',
+    '- пункт — список',
+    '1. пункт — нумерация',
+].join('\n');
+function FormattingHint() {
+    return (figma.widget.h(AutoLayout, { name: "Formatting tooltip", width: 20, height: 20, cornerRadius: 10, stroke: COLORS.muted, strokeWidth: 1, horizontalAlignItems: "center", verticalAlignItems: "center", tooltip: FORMATTING_TOOLTIP },
+        figma.widget.h(Text, { fontSize: 12, fontWeight: "bold", fill: COLORS.muted, tooltip: FORMATTING_TOOLTIP }, "?")));
 }
 function CoreonHistoryLog() {
     // Keep the original map key. v1 product and DS records remain untouched.
@@ -143,11 +147,12 @@ function CoreonHistoryLog() {
     const [displayLimit, setDisplayLimit] = useSyncedState('history-display-limit-v1', 5);
     const [composerOpen, setComposerOpen] = useSyncedState('composer-open-v2', false);
     const [draft, setDraft] = useSyncedState('composer-draft-v2', '');
-    const [draftCategory, setDraftCategory] = useSyncedState('composer-category-v2', 'changed');
-    const [composerHelp, setComposerHelp] = useSyncedState('composer-help-v2', false);
     const [editingId, setEditingId] = useSyncedState('editing-id-v2', null);
     const [editingDraft, setEditingDraft] = useSyncedState('editing-draft-v2', '');
-    const [editingHelp, setEditingHelp] = useSyncedState('editing-help-v2', false);
+    const [categoryEditorId, setCategoryEditorId] = useSyncedState('category-editor-id-v2', null);
+    // Avoid duplicate commits if Figma reports the same blur event twice before re-render.
+    let composerCommitted = false;
+    let editorCommitted = false;
     const all = recordsForHistory(items.entries().map(([id, item]) => ({ ...item, id })));
     const recent = all.slice(0, LIMIT_OPTIONS.includes(displayLimit) ? displayLimit : 5);
     function snapshot() {
@@ -166,35 +171,43 @@ function CoreonHistoryLog() {
         const entry = createHistoryRecord({ kind, text, category }, { id: (user === null || user === void 0 ? void 0 : user.id) || null, name: (user === null || user === void 0 ? void 0 : user.name) || 'Дизайнер' }, Date.now(), Math.random().toString(36).slice(2, 12));
         items.set(entry.id, entry);
     }
-    function saveComposer() {
-        if (!draft.trim())
+    function commitComposer(characters) {
+        if (!composerOpen || composerCommitted)
             return;
-        writeRecord('change', draft, draftCategory);
+        composerCommitted = true;
+        const cleaned = cleanText(characters);
+        // Clicking away from an empty input abandons the draft without creating a record.
+        if (cleaned)
+            writeRecord('change', cleaned, 'changed');
         setDraft('');
-        setDraftCategory('changed');
         setComposerOpen(false);
-        setComposerHelp(false);
-    }
-    function markHandoff() {
-        writeRecord('handoff', 'Передано', null);
-        setDraft('');
-        setDraftCategory('changed');
-        setComposerOpen(false);
-        setComposerHelp(false);
     }
     function startEdit(entry) {
         setEditingId(entry.id);
         setEditingDraft(entry.text);
-        setEditingHelp(false);
+        setCategoryEditorId(null);
     }
-    function saveEdit(id) {
-        const old = items.get(id);
-        if (!old || !editingDraft.trim())
+    function commitEdit(id, characters) {
+        if (editorCommitted)
             return;
-        items.set(id, editHistoryRecord(old, editingDraft, Date.now()));
+        editorCommitted = true;
+        const old = items.get(id);
+        const cleaned = cleanText(characters);
+        if (old && cleaned && old.text !== cleaned) {
+            items.set(id, editHistoryRecord(old, cleaned, Date.now()));
+        }
+        // Escape/no change or cleared input never overwrites the original record.
         setEditingId(null);
         setEditingDraft('');
-        setEditingHelp(false);
+    }
+    function chooseCategory(entry, category) {
+        if (entry.kind !== 'change')
+            return;
+        const old = items.get(entry.id);
+        if (old && old.kind === 'change' && effectiveCategory(old) !== category) {
+            items.set(entry.id, { ...old, category, updatedAt: Date.now() });
+        }
+        setCategoryEditorId(null);
     }
     useEffect(() => {
         figma.ui.onmessage = (message) => {
@@ -205,6 +218,14 @@ function CoreonHistoryLog() {
                         throw new Error('Запись не найдена');
                     items.set(message.id, editHistoryRecord(old, message.newText || '', Date.now()));
                     figma.ui.postMessage({ type: 'SAVED' });
+                    figma.ui.postMessage(snapshot());
+                }
+                else if (message.type === 'DELETE' && typeof message.id === 'string') {
+                    const old = items.get(message.id);
+                    if (!old)
+                        throw new Error('Запись уже удалена или не найдена');
+                    items.delete(message.id);
+                    figma.ui.postMessage({ type: 'DELETED', id: message.id });
                     figma.ui.postMessage(snapshot());
                 }
                 else if (message.type === 'REQUEST_STATE') {
@@ -243,39 +264,33 @@ function CoreonHistoryLog() {
                 figma.widget.h(Text, { fontSize: 11, fill: COLORS.muted },
                     all.length,
                     " \u0437\u0430\u043F\u0438\u0441\u0435\u0439")),
-            figma.widget.h(AutoLayout, { name: "Toggle composer", onClick: () => setComposerOpen(!composerOpen), padding: { horizontal: 11, vertical: 8 }, fill: COLORS.accent, cornerRadius: 7, hoverStyle: { fill: '#1856C3' } },
-                figma.widget.h(Text, { fill: COLORS.white, fontSize: 13, fontWeight: "bold" }, composerOpen ? 'Закрыть' : '+ Добавить'))),
-        composerOpen ? (figma.widget.h(AutoLayout, { name: "Inline composer", direction: "vertical", width: "fill-parent", spacing: 10, padding: 12, fill: COLORS.surface, cornerRadius: 8 },
-            figma.widget.h(Input, { name: "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0438\u0441\u044C", value: draft, inputBehavior: "multiline", width: "fill-parent", fontSize: 13, lineHeight: 20, fill: COLORS.ink, placeholder: "\u0427\u0442\u043E \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u043E\u0441\u044C? Markdown \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442\u0441\u044F", placeholderProps: { fill: COLORS.muted }, inputFrameProps: { padding: 10, fill: COLORS.white, stroke: COLORS.subtle, cornerRadius: 7 }, onTextEditEnd: (event) => setDraft(event.characters.slice(0, MAX_TEXT_LENGTH)) }),
-            figma.widget.h(AutoLayout, { direction: "horizontal", width: "fill-parent", spacing: 6 }, ['changed', 'added', 'fixed'].map((category) => (figma.widget.h(AutoLayout, { key: category, name: `Category ${category}`, onClick: () => setDraftCategory(category), padding: { horizontal: 9, vertical: 6 }, cornerRadius: 6, fill: draftCategory === category ? '#DBE8FF' : COLORS.white, stroke: draftCategory === category ? COLORS.accent : COLORS.subtle, strokeWidth: 1 },
-                figma.widget.h(Text, { fontSize: 11, fill: draftCategory === category ? COLORS.accent : COLORS.muted, fontWeight: draftCategory === category ? 'bold' : 'normal' }, categoryLabel(category)))))),
-            figma.widget.h(AutoLayout, { onClick: () => setComposerHelp(!composerHelp) },
-                figma.widget.h(Text, { fontSize: 11, fill: COLORS.accent }, "? \u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435")),
-            composerHelp ? FormattingHelp() : null,
-            figma.widget.h(AutoLayout, { direction: "horizontal", width: "fill-parent", spacing: 8, verticalAlignItems: "center" },
-                figma.widget.h(AutoLayout, { name: "Handoff", onClick: markHandoff, padding: { horizontal: 8, vertical: 8 } },
-                    figma.widget.h(Text, { fontSize: 11, fill: COLORS.muted }, "\u041F\u0435\u0440\u0435\u0434\u0430\u043D\u043E")),
+            figma.widget.h(AutoLayout, { name: "Toggle composer", onClick: () => { if (!composerOpen)
+                    setComposerOpen(true); }, padding: { horizontal: 11, vertical: 8 }, fill: COLORS.accent, cornerRadius: 7, hoverStyle: { fill: '#1856C3' } },
+                figma.widget.h(Text, { fill: COLORS.white, fontSize: 13, fontWeight: "bold" }, "+ \u0414\u043E\u0431\u0430\u0432\u0438\u0442\u044C"))),
+        composerOpen ? (figma.widget.h(AutoLayout, { name: "Inline composer", direction: "vertical", width: "fill-parent", spacing: 6, padding: { bottom: 8 } },
+            figma.widget.h(AutoLayout, { width: "fill-parent", direction: "horizontal", verticalAlignItems: "center", spacing: 8 },
+                figma.widget.h(Text, { fontSize: 11, fill: COLORS.muted }, "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0438\u0441\u044C \u00B7 Changed"),
                 figma.widget.h(AutoLayout, { width: "fill-parent" }),
-                figma.widget.h(AutoLayout, { name: "Cancel composer", onClick: () => { setComposerOpen(false); setDraft(''); setComposerHelp(false); }, padding: 8 },
-                    figma.widget.h(Text, { fontSize: 12, fill: COLORS.muted }, "\u041E\u0442\u043C\u0435\u043D\u0430")),
-                figma.widget.h(AutoLayout, { name: "Save composer", onClick: saveComposer, padding: { horizontal: 11, vertical: 8 }, fill: draft.trim() ? COLORS.accent : '#A4B9DB', cornerRadius: 7 },
-                    figma.widget.h(Text, { fontSize: 12, fontWeight: "bold", fill: COLORS.white }, "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C"))))) : null,
+                FormattingHint()),
+            figma.widget.h(Input, { name: "\u041D\u043E\u0432\u0430\u044F \u0437\u0430\u043F\u0438\u0441\u044C", value: draft, inputBehavior: "multiline", width: "fill-parent", fontSize: 13, lineHeight: 20, fill: COLORS.ink, placeholder: "\u0427\u0442\u043E \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u043E\u0441\u044C?", placeholderProps: { fill: COLORS.muted }, inputFrameProps: { padding: 0, fill: COLORS.white }, onTextEditEnd: (event) => commitComposer(event.characters) }))) : null,
         recent.length === 0 ? (figma.widget.h(AutoLayout, { width: "fill-parent", fill: COLORS.surface, padding: 20, cornerRadius: 8 },
             figma.widget.h(Text, { fontSize: 13, fill: COLORS.muted }, "\u041F\u043E\u043A\u0430 \u043D\u0435\u0442 \u0437\u0430\u043F\u0438\u0441\u0435\u0439. \u0414\u043E\u0431\u0430\u0432\u044C\u0442\u0435 \u043F\u0435\u0440\u0432\u0443\u044E."))) : recent.map((entry) => (figma.widget.h(AutoLayout, { key: entry.id, name: "History entry", direction: "vertical", width: "fill-parent", spacing: 7, padding: { top: 11, bottom: 13 } },
-            figma.widget.h(AutoLayout, { direction: "horizontal", width: "fill-parent", verticalAlignItems: "center", spacing: 8 },
+            entry.kind === 'handoff' ? (figma.widget.h(AutoLayout, { direction: "horizontal", width: "fill-parent", verticalAlignItems: "center", spacing: 8 },
                 figma.widget.h(Text, { fontWeight: "bold", fontSize: 12, fill: COLORS.ink }, entry.authorName),
                 figma.widget.h(Text, { fontSize: 11, fill: COLORS.muted }, formatDateTime(entry.createdAt)),
-                entry.kind === 'handoff' ? (figma.widget.h(Text, { fontSize: 11, fill: COLORS.green, fontWeight: "bold" }, "\u041F\u0435\u0440\u0435\u0434\u0430\u043D\u043E")) : (effectiveCategory(entry) !== 'changed' ? (figma.widget.h(Text, { fontSize: 11, fill: entry.category === 'added' ? COLORS.green : COLORS.amber, fontWeight: "bold" }, categoryLabel(effectiveCategory(entry)))) : null)),
-            entry.kind === 'handoff' ? (figma.widget.h(Text, { fontSize: 13, fill: COLORS.ink }, entry.text)) : editingId === entry.id ? (figma.widget.h(AutoLayout, { name: "Inline editor", direction: "vertical", width: "fill-parent", spacing: 8 },
-                figma.widget.h(Input, { name: "\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0437\u0430\u043F\u0438\u0441\u0438", value: editingDraft, inputBehavior: "multiline", width: "fill-parent", fontSize: 13, lineHeight: 20, fill: COLORS.ink, inputFrameProps: { padding: 10, fill: COLORS.surface, stroke: COLORS.subtle, cornerRadius: 7 }, onTextEditEnd: (event) => setEditingDraft(event.characters.slice(0, MAX_TEXT_LENGTH)) }),
-                figma.widget.h(AutoLayout, { onClick: () => setEditingHelp(!editingHelp) },
-                    figma.widget.h(Text, { fontSize: 11, fill: COLORS.accent }, "? \u0424\u043E\u0440\u043C\u0430\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435")),
-                editingHelp ? FormattingHelp() : null,
-                figma.widget.h(AutoLayout, { direction: "horizontal", spacing: 12 },
-                    figma.widget.h(AutoLayout, { name: "Save inline edit", onClick: () => saveEdit(entry.id) },
-                        figma.widget.h(Text, { fontSize: 12, fontWeight: "bold", fill: COLORS.accent }, "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C")),
-                    figma.widget.h(AutoLayout, { name: "Cancel inline edit", onClick: () => setEditingId(null) },
-                        figma.widget.h(Text, { fontSize: 12, fill: COLORS.muted }, "\u041E\u0442\u043C\u0435\u043D\u0430"))))) : (figma.widget.h(AutoLayout, { width: "fill-parent", spacing: 6, direction: "vertical" },
+                figma.widget.h(Text, { fontSize: 11, fill: COLORS.green, fontWeight: "bold" }, "\u041F\u0435\u0440\u0435\u0434\u0430\u043D\u043E"))) : (figma.widget.h(AutoLayout, { name: "Category trigger", direction: "horizontal", width: "fill-parent", verticalAlignItems: "center", spacing: 8, onClick: () => setCategoryEditorId(categoryEditorId === entry.id ? null : entry.id) },
+                figma.widget.h(Text, { fontWeight: "bold", fontSize: 12, fill: COLORS.ink }, entry.authorName),
+                figma.widget.h(Text, { fontSize: 11, fill: COLORS.muted }, formatDateTime(entry.createdAt)),
+                figma.widget.h(AutoLayout, { width: "fill-parent" }),
+                figma.widget.h(Text, { name: "Category hover action", fontSize: 11, fill: effectiveCategory(entry) === 'added' ? COLORS.green : effectiveCategory(entry) === 'fixed' ? COLORS.amber : COLORS.accent, opacity: effectiveCategory(entry) === 'changed' ? 0 : 1, hoverStyle: { opacity: 1 }, tooltip: "\u0418\u0437\u043C\u0435\u043D\u0438\u0442\u044C \u043A\u0430\u0442\u0435\u0433\u043E\u0440\u0438\u044E" }, effectiveCategory(entry) === 'changed' ? '+ Категория' : categoryLabel(effectiveCategory(entry))))),
+            categoryEditorId === entry.id && entry.kind === 'change' ? (figma.widget.h(AutoLayout, { name: "Category chooser", direction: "horizontal", spacing: 6 }, ['changed', 'added', 'fixed'].map(category => (figma.widget.h(AutoLayout, { key: category, name: `Choose category ${category}`, onClick: () => chooseCategory(entry, category), padding: { horizontal: 8, vertical: 5 }, cornerRadius: 5, fill: effectiveCategory(entry) === category ? '#DBE8FF' : COLORS.surface },
+                figma.widget.h(Text, { fontSize: 11, fill: COLORS.ink }, categoryLabel(category))))))) : null,
+            entry.kind === 'handoff' ? (figma.widget.h(Text, { fontSize: 13, fill: COLORS.ink }, entry.text)) : editingId === entry.id ? (figma.widget.h(AutoLayout, { name: "Inline editor", direction: "vertical", width: "fill-parent", spacing: 4 },
+                figma.widget.h(AutoLayout, { direction: "horizontal", width: "fill-parent", verticalAlignItems: "center" },
+                    figma.widget.h(Text, { fontSize: 11, fill: COLORS.muted }, "\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u00B7 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435 \u043F\u0440\u0438 \u0432\u044B\u0445\u043E\u0434\u0435 \u0438\u0437 \u043F\u043E\u043B\u044F"),
+                    figma.widget.h(AutoLayout, { width: "fill-parent" }),
+                    FormattingHint()),
+                figma.widget.h(Input, { name: "\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0435 \u0437\u0430\u043F\u0438\u0441\u0438", value: editingDraft, inputBehavior: "multiline", width: "fill-parent", fontSize: 13, lineHeight: 20, fill: COLORS.ink, inputFrameProps: { padding: 0, fill: COLORS.white }, onTextEditEnd: (event) => commitEdit(entry.id, event.characters) }))) : (figma.widget.h(AutoLayout, { width: "fill-parent", spacing: 6, direction: "vertical" },
                 MarkdownText({ source: entry.text }),
                 figma.widget.h(AutoLayout, { name: "Edit on canvas", onClick: () => startEdit(entry) },
                     figma.widget.h(Text, { fontSize: 11, fill: COLORS.muted }, "\u0420\u0435\u0434\u0430\u043A\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C")))),
