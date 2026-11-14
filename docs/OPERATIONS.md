@@ -22,7 +22,7 @@ Because the current connector cannot modify repository admin/security settings, 
 Do not treat these as already applied until verified.
 
 ## Figma development and release
-- No permanent ID is set in `manifest.json` yet. Import/register the widget through Figma Desktop and retain the assigned ID in future builds.
+- Figma Desktop registered the widget as `1703534862855031560`. The manifest includes this ID; preserve it in all future builds and verify updates against the same registered widget.
 - Build with `npm run check`; manual Desktop/browser validation per [QA](QA.md).
 - Publish to Community **only with owner approval**, after selecting license, artwork, support contact and a migration/recovery plan.
 - Keep existing FigLog and component logs until manual verification and an intentional transition.

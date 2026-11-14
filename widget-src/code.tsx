@@ -9,6 +9,7 @@ const COLORS = {
 };
 
 let currentPanel: 'add' | 'history' | null = null;
+let resolveOpenPanel: (() => void) | null = null;
 
 function CoreonHistoryLog() {
   const items = useSyncedMap<HistoryRecord>('history-records-v1');
@@ -22,10 +23,15 @@ function CoreonHistoryLog() {
     return { type: 'STATE', mode, records: recordsForMode(items.entries().map(([id, r]) => ({ ...r, id })), mode) };
   }
 
-  function present(panel: 'add' | 'history') {
+  function present(panel: 'add' | 'history'): Promise<void> {
     currentPanel = panel;
-    figma.showUI(__html__, { width: 440, height: panel === 'add' ? 390 : 580, title: 'Coreon History Log', themeColors: true });
-    figma.ui.postMessage({ ...snapshot(), panel });
+    // Figma stops a widget after a synchronous click handler. Keep the handler
+    // alive while its iframe is in use (Figma Widgets: Handling User Events).
+    return new Promise<void>((resolve) => {
+      resolveOpenPanel = resolve;
+      figma.showUI(__html__, { width: 440, height: panel === 'add' ? 390 : 580, title: 'Coreon History Log', themeColors: true });
+      figma.ui.postMessage({ ...snapshot(), panel });
+    });
   }
 
   function saveNew(message: { kind?: LogKind; text?: string; category?: ChangeCategory | null }) {
@@ -63,6 +69,9 @@ function CoreonHistoryLog() {
         } else if (message.type === 'CLOSE') {
           currentPanel = null;
           figma.ui.close();
+          const resolve = resolveOpenPanel;
+          resolveOpenPanel = null;
+          resolve?.();
         }
       } catch (error) {
         figma.ui.postMessage({ type: 'ERROR', message: error instanceof Error ? error.message : 'Не удалось сохранить запись' });

@@ -4,9 +4,18 @@
   "main": "dist/code.js",
   "ui": "ui.html",
   "widgetApi": "1.0.0",
-  "permissions": ["currentuser"],
+  "permissions": [
+    "currentuser"
+  ],
   "containsWidget": true,
-  "editorType": ["figma", "figjam"],
+  "editorType": [
+    "figma"
+  ],
   "documentAccess": "dynamic-page",
-  "networkAccess": { "allowedDomains": ["none"] }
+  "networkAccess": {
+    "allowedDomains": [
+      "none"
+    ]
+  },
+  "id": "1703534862855031560"
 }
