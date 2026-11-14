@@ -7,7 +7,7 @@ A living plan, not a promise of a release date. Order may change after testing.
 - [x] Source prototype v0.1.0 and basic GitHub Actions check on main.
 - [x] Repo-facing decisions, architecture, research, agent instructions and QA plan.
 - [ ] Repository ruleset/branch protection set by owner in GitHub UI.
-- [ ] Figma assigns development widget ID; preserve it for subsequent releases.
+- [x] Figma assigned development widget ID `1703534862855031560`; preserve it for subsequent releases.
 - [ ] Hands-on testing in Figma Desktop and (if feasible) browser.
 
 **Gate:** widget can be inserted, edited, reopened and retain history; no severe runtime regressions.

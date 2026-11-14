@@ -4,7 +4,7 @@
 A Figma widget is visible on the canvas and its synchronized state is shared by collaborators editing the same file/widget instance. The widget can open a richer `figma.showUI()` window without a separately installed plugin.
 
 ## Source map
-- `manifest.json`: Figma widget manifest (development ID is not assigned yet).
+- `manifest.json`: Figma widget manifest, with owner-registered widget ID `1703534862855031560`.
 - `widget-src/code.tsx`: on-canvas interface, Figma events and synced storage.
 - `widget-src/model.ts`: pure validation, ordering and record semantics.
 - `ui.html`: add and full-history window.

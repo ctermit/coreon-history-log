@@ -1,6 +1,6 @@
 # Coreon History Log
 
-**Stage:** v0.1.0 technical prototype. CI green; manual runtime validation in Figma pending. Not published.
+**Stage:** v0.1.1 technical prototype. CI green; manual runtime validation in Figma pending. Not published.
 
 ## Project documentation
 
@@ -26,7 +26,7 @@ A lightweight, collaborative history widget for Figma Design and FigJam. The sou
 
 ## Installation note
 
-A Figma widget ID is intentionally **not set** in this repository. Figma will assign it when the widget is registered/published. Keep that assigned ID in future versions.
+Figma Desktop assigned widget ID `1703534862855031560` when the owner registered the development widget. It is now preserved in `manifest.json`. Do not change or reuse this ID for another developer account.
 
 ## Try locally
 
@@ -58,3 +58,7 @@ A Figma widget ID is intentionally **not set** in this repository. Figma will as
 - Evaluate 50 / 200 / 500 historical entries, and reopening an existing widget.
 - Verify new-version migration and sequential edits by multiple designers.
 - Refine DS presentation and milestone UX from real workflow examples.
+
+## v0.1.1 iframe lifecycle hotfix
+
+The `+ Добавить` and `Вся история` handlers return an open Promise while the UI is visible, in accordance with Figma Widget lifecycle requirements. The Promise resolves when the iframe sends `CLOSE`. In v0.1.0, the UI flashed and immediately closed as the widget terminated. The new offline interaction test covers the lifecycle. Manual Figma runtime testing remains required.
