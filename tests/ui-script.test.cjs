@@ -96,3 +96,12 @@ test('HTML history auto-saves changed text on blur, but skips unchanged/blank ed
   f.get('editText').onblur();
   assert.equal(f.sent.filter(x=>x.pluginMessage.type==='EDIT').length,edits);
 });
+
+
+test('history timestamps use JetBrains Mono with Roboto Mono fallback and no comma', () => {
+  assert.match(html, /JetBrains Mono/);
+  assert.match(html, /Roboto Mono/);
+  assert.match(html, /toLocaleDateString/);
+  assert.match(html, /toLocaleTimeString/);
+  assert.match(html, /secondary tiny timestamp/);
+});

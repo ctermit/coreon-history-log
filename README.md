@@ -2,17 +2,18 @@
 
 Development preview of a lightweight Figma Design widget for a shared chronological design change log. **Not published in Figma Community.**
 
-## UX improvements in 0.2.1
+## Accepted functionality in 0.2.1
 
-- **UX-06:** simpler Figma `Input` in the on-canvas composer and editor; no additional outer frame or padding.
-- **UX-07:** remove the «Передано» creation button. Existing handoff records remain intact and visible.
-- **UX-08:** automatically save a new record or a text edit on `onTextEditEnd` (exit from Figma's editor); no separate canvas Save button. Blank new text does not create a record. Unchanged/blank edits do not overwrite records.
-- **UX-09:** the header action always reads «+ Добавить»; there is no replacement «Закрыть» button.
-- **UX-10, experimental:** category changed after creation via a subtle header hover action and compact `Changed / Added / Fixed` chooser. This needs real Figma Desktop hover testing before acceptance.
-- **UX-11:** a `?` icon provides Figma-native Markdown syntax tooltip next to the canvas composer and editor; the history editor uses native HTML `title`.
-- **UX-12:** delete a record from the full-history editor after an explicit confirmation; only the selected entry is deleted.
+- Permanent gray (`#F4F5F7`, radius 6) `Input` for adding a record, activated with one click.
+- Existing records render formatted Markdown and clickable HTTP(S) links by default. The **entire entry text area** now activates a gray edit `Input` when clicked, not only the pencil. Pencil appears on hover over that area; Figma native editor may need an extra click to place the text cursor.
+- No redundant «Новая запись» heading, separate Save, Close, handoff-creation or on-canvas edit buttons.
+- A single tooltip icon in the header uses the exact Coreon DS `helpCircleLine` vector asset. No duplicate help icons beside text fields.
+- Date style `JetBrains Mono` 11 px on canvas, with `JetBrains Mono`, `Roboto Mono`, monospace stack in the history HTML window; display `15.11.2026 22:19` without a comma.
+- Category can be changed after creation from the compact on-canvas category chooser; `Changed` remains default.
+- Full-history editor supports edit-on-blur and explicit confirmation before deleting one entry.
+- Empty new text and blank/unchanged edits do not overwrite history; existing old `Передано` records and schema v1/2 remain intact.
 
-The full-history HTML editor also saves nonblank changed text on blur and offers explicit **Отмена** to abandon editing. It suppresses blur-saving when Delete or Cancel is activated by pointer input. Verify its actual keyboard/focus handling during Figma QA.
+**Manual QA gate**: Figma-native `Span.href` navigation when nested in a clickable entry container must be checked before treating this build as the released stable default. Source-level tests verify safe links are still represented by link spans but do not reproduce Figma native click arbitration.
 
 ## Existing functionality
 
@@ -28,9 +29,9 @@ The full-history HTML editor also saves nonblank changed text on blur and offers
 
 1. Test in a copy of your Figma file and back up the current widget directory.
 2. In Widgets → Development, choose **Coreon History Log** → **Reveal in Finder**.
-3. Replace only `dist/code.js` and `ui.html` with the files from this archive. **Do not overwrite `manifest.json`.**
+3. Replace `dist/code.js` and `ui.html` with the files from this archive. **Do not overwrite `manifest.json`.**
 4. Reinsert/refresh the widget or restart Figma Desktop if necessary.
-5. Check adding without Save, category hover, tooltip, editing, delete confirmation, and persistence after reopen.
+5. Check adding without Save, category hover, Coreon help icon, full-area click to edit, opening a Markdown link, delete confirmation, and persistence after reopen.
 
 For local verification with installed dependencies: `npm run check` (TypeScript, tests and bundle).
 

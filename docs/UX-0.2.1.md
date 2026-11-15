@@ -28,3 +28,11 @@ The Widget API provides `onTextEditEnd` (blur) rather than per-keystroke events;
 ## Release decision
 
 Keep the 0.2.1 PR open until owner's manual Figma UX check. Once approved, merge and verify `main` CI. A public Figma Community upload remains a separate owner decision after additional UX and compatibility QA.
+
+## Current candidate — owner acceptance adjustments (15 Nov 2026)
+
+- UX-13: Coreon DS `helpCircleLine` SVG, single help tooltip in widget header; remove per-input icons and new-entry label.
+- UX-14: date/time has no comma; `JetBrains Mono` 11 px on canvas and a JetBrains Mono / Roboto Mono / monospace stack in history HTML.
+- UX-15: retain variant A uniform editing: native Input for new entry always gray (#F4F5F7); existing entries render Markdown and hyperlinks until user clicks the entry body (or pencil). A gray Input opens for that record, returning to normal on blur. `hoverStyle` reveals the pencil when the entire row is hovered. Native link click precedence over parent click still requires live Figma QA.
+
+Owner visual review and link-click integration check are release gates.

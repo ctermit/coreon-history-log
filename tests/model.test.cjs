@@ -80,4 +80,6 @@ test('date/time includes hours and minutes (locale-aware)', () => {
   const text = api.formatDateTime(new Date('2026-11-15T10:35:22Z').getTime());
   assert.match(text, /2026/);
   assert.match(text, /\d{2}:\d{2}/);
+  assert.doesNotMatch(text, /,/);
+  assert.match(text, /\d{2}\.\d{2}\.2026 \d{2}:\d{2}/);
 });
