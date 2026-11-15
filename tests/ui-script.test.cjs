@@ -98,6 +98,19 @@ test('HTML history auto-saves changed text on blur, but skips unchanged/blank ed
 });
 
 
+test('HTML editor handles ordinary keystrokes and Escape without throwing', () => {
+  const f = setup();
+  const rec = {id:'key',text:'Original',authorName:'Designer',createdAt:10,kind:'change',category:'changed'};
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records:[rec]}}});
+  f.get('list').children[0].children.at(-1).onclick();
+  assert.doesNotThrow(() => f.get('editText').onkeydown({key:'a',preventDefault(){}}));
+  assert.doesNotThrow(() => f.get('editText').onkeydown({key:'Enter',preventDefault(){}}));
+  let prevented = false;
+  f.get('editText').onkeydown({key:'Escape',preventDefault(){prevented = true;}});
+  assert.equal(prevented, true);
+  assert.equal(f.sent.filter(x=>x.pluginMessage.type==='EDIT').length,0);
+});
+
 test('history timestamps use JetBrains Mono with Roboto Mono fallback and no comma', () => {
   assert.match(html, /JetBrains Mono/);
   assert.match(html, /Roboto Mono/);

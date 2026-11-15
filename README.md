@@ -1,4 +1,4 @@
-# Coreon History Log — 0.2.1 UX preview
+# Coreon History Log — 0.2.2 release candidate
 
 Development preview of a lightweight Figma Design widget for a shared chronological design change log. **Not published in Figma Community.**
 
