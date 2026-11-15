@@ -92,10 +92,8 @@ function categoryLabel(category: ChangeCategory | null): string {
 }
 
 function formatDateTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleString('ru-RU', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
+  const date = new Date(timestamp);
+  return `${date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
 }
 
 /** Deliberately small Markdown subset: bold, HTTP(S) links and lists.
