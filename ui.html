@@ -225,10 +225,6 @@
       editing = null;
       editing = null;
       showEditor(false);
-    } else if (message.type === 'DELETED' && pendingDelete && message.id === editing) {
-      pendingDelete = false;
-      editing = null;
-      showEditor(false);
     }
   };
   // Prevent blur-autosave before pressing Cancel or Delete in the HTML editor.
