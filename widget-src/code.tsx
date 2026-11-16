@@ -78,7 +78,7 @@ function CoreonHistoryLog() {
     panelOpen = true;
     return new Promise<void>((resolve) => {
       resolveOpenPanel = resolve;
-      figma.showUI(__html__, { width: 490, height: 630, title: 'Coreon History Log', themeColors: true });
+      figma.showUI(__html__, { width: 490, height: 630, title: 'Design History Log', themeColors: true });
       figma.ui.postMessage(snapshot());
     });
   }
@@ -175,11 +175,11 @@ function CoreonHistoryLog() {
   });
 
   return (
-    <AutoLayout name="Coreon History Log" direction="vertical" width={410} spacing={0}
+    <AutoLayout name="Design History Log" direction="vertical" width={410} spacing={0}
       padding={16} fill={COLORS.white} cornerRadius={12} stroke={COLORS.subtle} strokeWidth={1}>
       <AutoLayout name="Header" direction="horizontal" width="fill-parent" verticalAlignItems="center" spacing={10} padding={{ bottom: 10 }}>
         <AutoLayout direction="vertical" spacing={4} width="fill-parent">
-          <Text fontSize={17} fontWeight="bold" fill={COLORS.ink}>История изменений</Text>
+          <Text fontSize={17} fontWeight="bold" fill={COLORS.ink}>Design History Log</Text>
           <Text fontSize={11} fill={COLORS.muted}>{all.length} записей</Text>
         </AutoLayout>
         {FormattingHint()}

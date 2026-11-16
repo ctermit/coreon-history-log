@@ -163,7 +163,7 @@ function CoreonHistoryLog() {
         panelOpen = true;
         return new Promise((resolve) => {
             resolveOpenPanel = resolve;
-            figma.showUI(__html__, { width: 490, height: 630, title: 'Coreon History Log', themeColors: true });
+            figma.showUI(__html__, { width: 490, height: 630, title: 'Design History Log', themeColors: true });
             figma.ui.postMessage(snapshot());
         });
     }
@@ -258,10 +258,10 @@ function CoreonHistoryLog() {
             setDisplayLimit(Number(propertyValue));
         }
     });
-    return (figma.widget.h(AutoLayout, { name: "Coreon History Log", direction: "vertical", width: 410, spacing: 0, padding: 16, fill: COLORS.white, cornerRadius: 12, stroke: COLORS.subtle, strokeWidth: 1 },
+    return (figma.widget.h(AutoLayout, { name: "Design History Log", direction: "vertical", width: 410, spacing: 0, padding: 16, fill: COLORS.white, cornerRadius: 12, stroke: COLORS.subtle, strokeWidth: 1 },
         figma.widget.h(AutoLayout, { name: "Header", direction: "horizontal", width: "fill-parent", verticalAlignItems: "center", spacing: 10, padding: { bottom: 10 } },
             figma.widget.h(AutoLayout, { direction: "vertical", spacing: 4, width: "fill-parent" },
-                figma.widget.h(Text, { fontSize: 17, fontWeight: "bold", fill: COLORS.ink }, "\u0418\u0441\u0442\u043E\u0440\u0438\u044F \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439"),
+                figma.widget.h(Text, { fontSize: 17, fontWeight: "bold", fill: COLORS.ink }, "Design History Log"),
                 figma.widget.h(Text, { fontSize: 11, fill: COLORS.muted },
                     all.length,
                     " \u0437\u0430\u043F\u0438\u0441\u0435\u0439")),
