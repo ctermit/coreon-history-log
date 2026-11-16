@@ -1,4 +1,4 @@
-# Coreon History Log — 0.2.2 release candidate
+# Design History Log — 0.2.2 Community release candidate
 
 Development preview of a lightweight Figma Design widget for a shared chronological design change log. **Not published in Figma Community.**
 
@@ -28,7 +28,7 @@ Development preview of a lightweight Figma Design widget for a shared chronologi
 ## Installation in existing Figma Desktop development widget
 
 1. Test in a copy of your Figma file and back up the current widget directory.
-2. In Widgets → Development, choose **Coreon History Log** → **Reveal in Finder**.
+2. In Widgets → Development, choose **Design History Log** → **Reveal in Finder**.
 3. Replace `dist/code.js` and `ui.html` with the files from this archive. **Do not overwrite `manifest.json`.**
 4. Reinsert/refresh the widget or restart Figma Desktop if necessary.
 5. Check adding without Save, category hover, Coreon help icon, full-area click to edit, opening a Markdown link, delete confirmation, and persistence after reopen.
