@@ -1,6 +1,6 @@
 {
   "name": "coreon-history-log",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A minimal collaborative design changelog widget for Figma and FigJam",
   "private": true,
   "type": "module",
@@ -8,7 +8,8 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test tests/*.test.cjs",
-    "check": "npm run typecheck && npm run test && npm run build"
+    "check": "npm run typecheck && npm run test && npm run build && npm run package:test",
+    "package:test": "node scripts/package-test.mjs"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.142.0",
