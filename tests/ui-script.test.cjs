@@ -64,14 +64,17 @@ test('list deletion is confirmed once by ID; cancel leaves records intact', () =
   assert.equal(actions.children[1].textContent, 'Удалить');
   actions.children[1].onclick();
   let confirmRow = f.get('list').children[0].children.at(-1);
+  assert.equal(confirmRow.className, 'delete-confirmation');
   assert.equal(confirmRow.children[0].textContent,'Удалить запись?');
-  assert.equal(confirmRow.children.length,3);
-  confirmRow.children[1].onclick();
+  assert.equal(confirmRow.children.length,2);
+  assert.equal(confirmRow.children[1].children[0].textContent,'Удалить');
+  assert.equal(confirmRow.children[1].children[1].textContent,'Отмена');
+  confirmRow.children[1].children[1].onclick();
   assert.equal(f.get('list').children[0].children.at(-1).className,'entry-actions');
   assert.equal(f.sent.filter(x=>x.pluginMessage.type==='DELETE').length,0);
   f.get('list').children[0].children.at(-1).children[1].onclick();
   confirmRow = f.get('list').children[0].children.at(-1);
-  const confirm = confirmRow.children[2];
+  const confirm = confirmRow.children[1].children[0];
   confirm.onclick();
   confirm.onclick();
   assert.equal(f.sent.filter(x=>x.pluginMessage.type==='DELETE').length,1);
@@ -98,7 +101,7 @@ test('oldest record remains deletable on the last page of 530 entries', () => {
   assert.equal(oldest.children[1].children[0].children[0].textContent,'Note 529');
   oldest.children.at(-1).children[1].onclick();
   const confirmation=f.get('list').children.at(-1).children.at(-1);
-  confirmation.children[2].onclick();
+  confirmation.children[1].children[0].onclick();
   assert.equal(f.sent.at(-1).pluginMessage.id,'id-529');
   assert.equal(f.sent.filter(x=>x.pluginMessage.type==='DELETE').length,1);
 });
@@ -114,7 +117,7 @@ test('search can find and cancel deletion of an old record', () => {
   f.get('search').oninput();
   assert.equal(f.get('list').children.length,1);
   f.get('list').children[0].children.at(-1).children[1].onclick();
-  f.get('list').children[0].children.at(-1).children[1].onclick();
+  f.get('list').children[0].children.at(-1).children[1].children[1].onclick();
   assert.equal(f.sent.filter(x=>x.pluginMessage.type==='DELETE').length,0);
 });
 
@@ -158,4 +161,23 @@ test('history timestamps use JetBrains Mono with Roboto Mono fallback and no com
   assert.match(html, /toLocaleDateString/);
   assert.match(html, /toLocaleTimeString/);
   assert.match(html, /secondary tiny timestamp/);
+});
+
+test('confirmation overlays the chosen entry without adding a block below it; close is native only', () => {
+  assert.match(html, /\.delete-confirmation \{ position:absolute; inset:0;/);
+  assert.match(html, /\.delete-confirmation::before/);
+  assert.doesNotMatch(html, /id="close"/);
+  assert.doesNotMatch(html, /\$\('close'\)\.onclick/);
+  const f = setup();
+  const records = [
+    {id:'target',text:'Target',authorName:'A',createdAt:200,kind:'change',category:'changed'},
+    {id:'other',text:'Other',authorName:'B',createdAt:100,kind:'change',category:'changed'}
+  ];
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records}}});
+  f.get('list').children[0].children.at(-1).children[1].onclick();
+  const target = f.get('list').children[0];
+  const other = f.get('list').children[1];
+  assert.equal(target.children.at(-1).className,'delete-confirmation');
+  assert.equal(other.children.at(-1).className,'entry-actions');
+  assert.equal(f.sent.filter(x=>x.pluginMessage.type==='DELETE').length,0);
 });

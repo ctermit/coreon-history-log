@@ -21,7 +21,7 @@
     .filter { display: flex; gap: 8px; margin-bottom: 13px; }
     .filter input { flex: 1; min-width: 0; }
     .filter select { width: 135px; }
-    .entry { padding: 14px 0; border-bottom: 1px solid var(--figma-color-border, #e6e7eb); }
+    .entry { position:relative; padding: 14px 0; border-bottom: 1px solid var(--figma-color-border, #e6e7eb); }
     .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; line-height: 18px; margin-bottom: 7px; }
     .author { font-weight: 650; }
     .tag { font-size: 11px; font-weight: 650; border-radius: 4px; padding: 2px 6px; background: var(--figma-color-bg-secondary, #f1f3f5); }
@@ -34,8 +34,13 @@
     .edit-link, .delete-link { padding:0; font-size:12px; }
     .edit-link { color:var(--figma-color-text-brand,#2469e8); }
     .delete-link { color:var(--figma-color-text-danger,#c93635); }
-    .delete-confirmation { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px; }
-    .delete-confirmation .secondary-btn, .delete-confirmation .danger-primary { padding:6px 10px; }
+    .delete-confirmation { position:absolute; inset:0; z-index:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:6px; text-align:center; }
+    .delete-confirmation::before { content:''; position:absolute; inset:0; background:var(--figma-color-bg,#fff); opacity:.9; pointer-events:none; }
+    .delete-confirmation > * { position:relative; z-index:1; }
+    .delete-confirmation-title { font-size:13px; font-weight:650; }
+    .delete-confirmation-actions { display:flex; align-items:center; justify-content:center; gap:8px; }
+    .delete-confirmation-actions .secondary-btn, .delete-confirmation-actions .danger-primary { padding:6px 12px; }
+
     .handoff { padding: 12px; margin-top: 4px; font-weight: 650; background: var(--figma-color-bg-secondary, #f1f3f5); border-radius: 6px; }
     .footer { display: flex; align-items: center; justify-content: space-between; margin-top: 15px; gap: 10px; }
     .empty { text-align: center; color: var(--figma-color-text-secondary, #697080); padding: 40px 20px; }
@@ -59,7 +64,7 @@
   </style>
 </head>
 <body>
-  <header><div><h1>Вся история изменений</h1><div id="total" class="secondary tiny">Загрузка записей…</div></div><button class="link" id="close" aria-label="Закрыть">Закрыть</button></header>
+  <header><div><h1>Вся история изменений</h1><div id="total" class="secondary tiny">Загрузка записей…</div></div></header>
   <main>
     <section id="history">
       <div class="filter">
@@ -205,7 +210,7 @@
         const confirmation = tag('div', 'delete-confirmation');
         confirmation.setAttribute('role', 'group');
         confirmation.setAttribute('aria-label', 'Подтверждение удаления');
-        confirmation.append(tag('span', '', 'Удалить запись?'));
+        confirmation.append(tag('span', 'delete-confirmation-title', 'Удалить запись?'));
         const cancel = tag('button', 'secondary-btn', 'Отмена');
         cancel.type = 'button';
         cancel.disabled = pendingDelete;
@@ -223,7 +228,9 @@
           renderList();
           send({ type: 'DELETE', id: rec.id });
         };
-        confirmation.append(cancel, confirm);
+        const buttons = tag('div', 'delete-confirmation-actions');
+        buttons.append(confirm, cancel);
+        confirmation.append(buttons);
         card.append(confirmation);
       }
       root.append(card);
@@ -237,7 +244,6 @@
       const next = tag('button', 'secondary-btn', 'Дальше'); next.onclick = () => { if (!pendingDelete) deleting = null; page += 1; renderList(); }; footer.append(next);
     }
   }
-  $('close').onclick = () => send({ type: 'CLOSE' });
   $('search').oninput = () => { if (!pendingDelete) deleting = null; page = 0; renderList(); };
   $('typeFilter').onchange = () => { if (!pendingDelete) deleting = null; page = 0; renderList(); };
   function commitHistoryEdit() {

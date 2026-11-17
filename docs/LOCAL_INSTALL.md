@@ -17,7 +17,7 @@ Back up its local directory. Replace only `dist/code.js` and `ui.html`; **do not
 
 - Add and edit a record on canvas; confirm changes survive file reopen.
 - Search full history and navigate to its last page.
-- Delete an old/legacy record via list action → compact **«Удалить запись?»** → **«Удалить»**.
+- Delete an old/legacy record via list action → overlay **«Удалить запись?»** → **«Удалить»**.
 - Cancel another deletion; confirm the record remains.
 - Confirm no unrelated records disappear, including in the 530-record test file.
 - Check category changes, Markdown links and the help tooltip.

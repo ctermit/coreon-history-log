@@ -10,7 +10,7 @@ A lightweight Figma Design widget for a shared chronological design change log. 
 - A single tooltip icon in the header uses the exact Coreon DS `helpCircleLine` vector asset. No duplicate help icons beside text fields.
 - Date style `JetBrains Mono` 11 px on canvas, with `JetBrains Mono`, `Roboto Mono`, monospace stack in the history HTML window; display `15.11.2026 22:19` without a comma.
 - Category can be changed after creation from the compact on-canvas category chooser; `Changed` remains default.
-- The full-history list supports deletion of a selected entry with a compact inline confirmation; the editor still saves on blur.
+- The full-history list supports deletion of a selected entry with a compact translucent overlay confirmation; the editor still saves on blur.
 - Empty new text and blank/unchanged edits do not overwrite history; existing old `Передано` records and schema v1/2 remain intact.
 
 **Manual QA gate**: Figma-native `Span.href` navigation when nested in a clickable entry container must be checked before treating this build as the released stable default. Source-level tests verify safe links are still represented by link spans but do not reproduce Figma native click arbitration.
