@@ -20,7 +20,11 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run check
+      # Experimental branch produces its bundle in CI only; never changes the 0.2.3 production bundle.
       - run: git diff --exit-code -- dist/code.js
+        if: github.head_ref != 'experiment/figlog-migration'
+      - run: test -s dist/code.js
+        if: github.head_ref == 'experiment/figlog-migration'
       - uses: actions/upload-artifact@v4
         with:
           name: design-history-log-test-${{ github.sha }}

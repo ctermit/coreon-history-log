@@ -190,3 +190,36 @@ test('confirmation overlays the chosen entry without adding a block below it; cl
   assert.equal(other.children.at(-1).className,'entry-actions');
   assert.equal(f.sent.filter(x=>x.pluginMessage.type==='DELETE').length,0);
 });
+
+
+test('experimental FigLog UI requires preview before asking widget to import', () => {
+  const f = setup();
+  f.get('figlogImport').hidden = true; // HTML has the initial hidden attribute; mock DOM must reflect it.
+  f.get('figlogOpen').onclick();
+  assert.equal(f.get('figlogImport').hidden, false);
+  f.get('figlogSource').value = 'https://www.figma.com/design/example/file?node-id=74-437';
+  f.get('figlogInspect').onclick();
+  assert.equal(f.sent.at(-1).pluginMessage.type, 'FIGLOG_PREVIEW');
+  assert.equal(f.sent.at(-1).pluginMessage.frameId, '74:437');
+  assert.equal(f.sent.filter(x => x.pluginMessage.type === 'FIGLOG_IMPORT').length, 0);
+  f.fakeWindow.onmessage({ data: { pluginMessage: {
+    type: 'FIGLOG_PREVIEW_RESULT', rowCount: 5, ready: 4, duplicates: 0, skipped: [],
+    examples: [{ author: 'Designer', createdLabel: '11|15|26 @ 1:19 AM', text: 'Note' }]
+  } } });
+  assert.equal(f.get('figlogConfirm').hidden, false);
+  f.get('figlogConfirm').onclick();
+  f.get('figlogConfirm').onclick();
+  assert.equal(f.sent.filter(x => x.pluginMessage.type === 'FIGLOG_IMPORT').length, 1);
+  f.fakeWindow.onmessage({ data: { pluginMessage: { type: 'FIGLOG_IMPORTED', added: 4, duplicates: 0, skipped: 0 } } });
+  assert.equal(f.get('figlogConfirm').hidden, true);
+});
+
+
+test('more than 50 FigLog entries show a preview but disable import', () => {
+  const f=setup();
+  f.fakeWindow.onmessage({data:{pluginMessage:{
+    type:'FIGLOG_PREVIEW_RESULT',rowCount:100,ready:51,duplicates:0,skipped:[],examples:[],experimentalLimit:50
+  }}});
+  assert.equal(f.get('figlogConfirm').hidden,true);
+  assert.match(f.get('figlogResult').textContent,/лимит импорта 50/);
+});

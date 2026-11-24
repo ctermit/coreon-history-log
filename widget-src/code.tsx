@@ -9,6 +9,8 @@ const COLORS = {
 
 let resolveOpenPanel: (() => void) | null = null;
 let panelOpen = false;
+let figlogPreview: FiglogPreview | null = null;
+let figlogBusy = false;
 
 function MarkdownText({ source }: { source: string }) {
   const lines = parseMarkdown(source);
@@ -132,7 +134,7 @@ function CoreonHistoryLog() {
   }
 
   useEffect(() => {
-    figma.ui.onmessage = (message: { type: string; id?: string; newText?: string }) => {
+    figma.ui.onmessage = (message: { type: string; id?: string; newText?: string; frameId?: string }) => {
       try {
         if (message.type === 'EDIT' && typeof message.id === 'string') {
           const old = items.get(message.id);
@@ -146,17 +148,67 @@ function CoreonHistoryLog() {
           items.delete(message.id);
           figma.ui.postMessage({ type: 'DELETED', id: message.id });
           figma.ui.postMessage(snapshot());
+        } else if (message.type === 'FIGLOG_PREVIEW' && typeof message.frameId === 'string') {
+          if (figlogBusy) return;
+          figlogBusy = true;
+          figlogPreview = null;
+          void (async () => {
+            try {
+              const node = await figma.getNodeByIdAsync(message.frameId!);
+              if (!node || node.type !== 'FRAME') throw new Error('Фрейм не найден в текущем файле');
+              const parsed = extractFiglogFrame(node);
+              figlogPreview = parsed;
+              figma.ui.postMessage({
+                type: 'FIGLOG_PREVIEW_RESULT',
+                frameId: parsed.frameId,
+                rowCount: parsed.rowCount,
+                ready: parsed.entries.filter((item) => !items.get(item.id)).length,
+                experimentalLimit: 50,
+                duplicates: parsed.entries.filter((item) => !!items.get(item.id)).length,
+                skipped: parsed.skipped,
+                examples: parsed.entries.slice(0, 10).map((item) => ({
+                  id: item.id, author: item.authorName, text: item.text,
+                  createdLabel: item.importedFrom?.createdLabel || '', category: item.category,
+                })),
+              });
+            } catch (err) {
+              figma.ui.postMessage({ type: 'FIGLOG_ERROR', message: err instanceof Error ? err.message : 'Не удалось прочитать FigLog' });
+            } finally {
+              figlogBusy = false;
+            }
+          })();
+        } else if (message.type === 'FIGLOG_IMPORT') {
+          if (!figlogPreview || figlogBusy) throw new Error('Сначала проверьте источник');
+          const canImport = figlogPreview.entries.filter((entry) => !items.get(entry.id)).length;
+          if (canImport > 50) throw new Error('Эксперимент ограничен 50 записями за импорт. Большой FigLog можно проверить без записи.');
+          figlogBusy = true;
+          const preview = figlogPreview;
+          figlogPreview = null;
+          try {
+            let added = 0, duplicates = 0;
+            for (const entry of preview.entries) {
+              if (items.get(entry.id)) { duplicates += 1; continue; }
+              items.set(entry.id, entry);
+              added += 1;
+            }
+            figma.ui.postMessage({ type: 'FIGLOG_IMPORTED', added, duplicates, skipped: preview.skipped.length });
+            figma.ui.postMessage(snapshot());
+          } finally {
+            figlogBusy = false;
+          }
         } else if (message.type === 'REQUEST_STATE') {
           figma.ui.postMessage(snapshot());
         } else if (message.type === 'CLOSE') {
           panelOpen = false;
+          figlogPreview = null;
           figma.ui.close();
           const resolve = resolveOpenPanel;
           resolveOpenPanel = null;
           resolve?.();
         }
       } catch (error) {
-        figma.ui.postMessage({ type: 'ERROR', message: error instanceof Error ? error.message : 'Не удалось сохранить запись' });
+        figma.ui.postMessage({ type: message.type.startsWith('FIGLOG_') ? 'FIGLOG_ERROR' : 'ERROR',
+          message: error instanceof Error ? error.message : 'Не удалось сохранить запись' });
       }
     };
     if (panelOpen) figma.ui.postMessage(snapshot());

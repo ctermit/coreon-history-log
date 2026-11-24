@@ -45,3 +45,17 @@ For local verification with installed dependencies, run `npm run check` (TypeScr
 Figma widgets' on-canvas `Input` shows Figma's native text editor; we cannot restyle that internal editor. `onTextEditEnd` fires when the input loses focus, not on each keystroke. Native hover styling supports opacity/color overrides only. Confirm the exact focus, Escape, mouse and keyboard behaviors in Figma Desktop. The view's conceptual UX is approved; **runtime hover/autosave and visual acceptance are still pending**.
 
 The 0.2.3 development build does not automatically publish or update Figma Community.
+
+## Experimental FigLog migration (not in Community)
+
+The isolated branch `experiment/figlog-migration` adds a **test-only** import action in the full history window. It reads a **detached (Copy as layers) FigLog frame in the same Figma file** using its node ID. Enter the frame URL or node ID, inspect the preview, then explicitly import into a **duplicate test file**. The original frame is never modified; no network is used.
+
+- Preserves visible text, author, creation time, optional edited time, supported Added/Changed/Fixed categories.
+- Drops empty drafts; skips ambiguous entries, unsupported types and entries with links whose target URLs are not present in the detached layers, rather than silently losing their data.
+- Original time-zone metadata is unavailable in detached layers; dates are interpreted as Figma's local time and original labels retained for audit. Confirm results before using a different time zone.
+- Uses deterministic source-frame/source-row IDs so repeat imports skip existing entries, including edited imported records.
+- The importer is experimental and must not be merged into stable `main` or published until owner-approved after real file testing.
+
+For this experiment, the checked-in `dist/code.js` is intentionally the **frozen 0.2.3** bundle. Always install from the **CI-built test ZIP** for PR #9, not from raw files in this branch. On standard production PRs, CI continues to enforce exact generated-bundle synchronization.
+
+**Current experiment safety limit:** up to 50 imported entries per confirmation; larger FigLogs may be previewed but require a separately reviewed chunked-import implementation before any writes.

@@ -41,6 +41,14 @@
     .delete-confirmation-actions { display:flex; align-items:center; justify-content:center; gap:8px; }
     .delete-confirmation-actions .secondary-btn, .delete-confirmation-actions .danger-primary { padding:6px 12px; }
 
+    .figlog-tools { margin-top:14px; }
+    .figlog-import { margin-top:8px; padding:12px; border:1px solid var(--figma-color-border,#e6e7eb); border-radius:7px; }
+    .figlog-import[hidden], .figlog-import button[hidden] { display:none; }
+    .figlog-import label { margin-bottom:7px; }
+    .figlog-import input { width:100%; }
+    .figlog-import .buttons { justify-content:flex-start; margin-top:10px; }
+    .figlog-result { white-space:pre-wrap; line-height:1.5; margin-top:10px; overflow-wrap:anywhere; }
+    .figlog-example { padding:6px 0; border-bottom:1px solid var(--figma-color-border,#e6e7eb); }
     .handoff { padding: 12px; margin-top: 4px; font-weight: 650; background: var(--figma-color-bg-secondary, #f1f3f5); border-radius: 6px; }
     .footer { display: flex; align-items: center; justify-content: space-between; margin-top: 15px; gap: 10px; }
     .empty { text-align: center; color: var(--figma-color-text-secondary, #697080); padding: 40px 20px; }
@@ -77,7 +85,19 @@
           <option value="handoff">Передано</option>
         </select>
       </div>
+      <div class="figlog-tools"><button id="figlogOpen" class="link" type="button">Импорт FigLog (эксперимент)</button></div>
       <div id="counter" class="secondary tiny"></div><div id="list"></div><div id="pageFooter" class="footer"></div>
+      <section id="figlogImport" class="figlog-import" hidden>
+        <label for="figlogSource">Ссылка на разбитый FigLog в этом файле</label>
+        <input id="figlogSource" placeholder="Ссылка Figma или 74:437" />
+        <div class="buttons">
+          <button type="button" id="figlogInspect" class="secondary-btn">Проверить</button>
+          <button type="button" id="figlogCancel" class="secondary-btn">Отмена</button>
+        </div>
+        <div class="figlog-result" id="figlogResult" role="status" aria-live="polite"></div>
+        <div id="figlogExamples"></div>
+        <button type="button" id="figlogConfirm" class="primary" hidden>Импортировать</button>
+      </section>
     </section>
     <section id="editor">
       <div class="editor-header"><label for="editText">Редактирование записи</label><button type="button" class="help-icon" aria-label="Подсказка по форматированию"
@@ -100,6 +120,8 @@
   let preventBlurSave = false;
   let pendingDelete = false;
   let deleting = null;
+  let figlogWaiting = false;
+  let figlogReady = 0;
   const pageSize = 40;
   const send = (message) => parent.postMessage({ pluginMessage: message }, '*');
   const tag = (name, className = '', text = '') => {
@@ -245,6 +267,45 @@
       const next = tag('button', 'secondary-btn', 'Дальше'); next.onclick = () => { if (!pendingDelete) deleting = null; page += 1; renderList(); }; footer.append(next);
     }
   }
+  $('figlogOpen').onclick = () => {
+    $('figlogImport').hidden = !$('figlogImport').hidden;
+    $('figlogConfirm').hidden = true;
+    $('figlogResult').textContent = '';
+    $('figlogExamples').replaceChildren();
+    figlogReady = 0;
+  };
+  $('figlogCancel').onclick = () => {
+    $('figlogImport').hidden = true;
+    $('figlogConfirm').hidden = true;
+    figlogReady = 0;
+  };
+  $('figlogInspect').onclick = () => {
+    if (figlogWaiting) return;
+    const raw = $('figlogSource').value.trim();
+    let decoded = raw;
+    try { decoded = decodeURIComponent(raw); } catch (_) {
+      $('figlogResult').textContent = 'Некорректная ссылка Figma';
+      return;
+    }
+    const match = decoded.match(/[?&]node-id=(\d+)[:-](\d+)/) || decoded.match(/^(\d+)[:-](\d+)$/);
+    $('figlogConfirm').hidden = true;
+    $('figlogExamples').replaceChildren();
+    figlogReady = 0;
+    if (!match) {
+      $('figlogResult').textContent = 'Укажите ссылку с node-id или ID фрейма, например 74:437';
+      return;
+    }
+    figlogWaiting = true;
+    $('figlogResult').textContent = 'Проверяю разбитый FigLog…';
+    send({ type: 'FIGLOG_PREVIEW', frameId: match[1] + ':' + match[2] });
+  };
+  $('figlogConfirm').onclick = () => {
+    if (figlogWaiting || !figlogReady) return;
+    figlogWaiting = true;
+    $('figlogConfirm').hidden = true;
+    $('figlogResult').textContent = 'Импортирую записи…';
+    send({ type: 'FIGLOG_IMPORT' });
+  };
   $('search').oninput = () => { if (!pendingDelete) deleting = null; page = 0; renderList(); };
   $('typeFilter').onchange = () => { if (!pendingDelete) deleting = null; page = 0; renderList(); };
   function commitHistoryEdit() {
@@ -278,6 +339,35 @@
     if (message.type === 'STATE') {
       records = Array.isArray(message.records) ? message.records : [];
       renderList();
+    } else if (message.type === 'FIGLOG_PREVIEW_RESULT') {
+      figlogWaiting = false;
+      figlogReady = message.ready || 0;
+      const skipped = Array.isArray(message.skipped) ? message.skipped : [];
+      $('figlogResult').textContent = 'Строк: ' + message.rowCount + ' · к переносу: ' + figlogReady +
+        ' · уже перенесено: ' + message.duplicates + ' · пропущено: ' + skipped.length +
+        '\nДаты читаются как локальное время без известного часового пояса. Проверьте их после импорта.' +
+        (figlogReady > (message.experimentalLimit || 50) ? '\nБольшой журнал пока доступен только для просмотра: лимит импорта 50 записей.' : '');
+      $('figlogExamples').replaceChildren();
+      for (const example of (message.examples || []).slice(0, 10)) {
+        $('figlogExamples').append(tag('div', 'figlog-example',
+          example.author + ' · ' + example.createdLabel + '\n' + example.text));
+      }
+      for (const issue of skipped.slice(0, 10)) {
+        $('figlogExamples').append(tag('div', 'secondary tiny', 'Пропущено ' + issue.rowId + ': ' + issue.reason));
+      }
+      $('figlogConfirm').textContent = 'Импортировать ' + figlogReady + ' записей';
+      $('figlogConfirm').hidden = !figlogReady || figlogReady > (message.experimentalLimit || 50);
+    } else if (message.type === 'FIGLOG_IMPORTED') {
+      figlogWaiting = false;
+      figlogReady = 0;
+      $('figlogConfirm').hidden = true;
+      $('figlogResult').textContent = 'Добавлено: ' + message.added + ' · уже существовало: ' +
+        message.duplicates + ' · пропущено: ' + message.skipped;
+    } else if (message.type === 'FIGLOG_ERROR') {
+      figlogWaiting = false;
+      figlogReady = 0;
+      $('figlogConfirm').hidden = true;
+      $('figlogResult').textContent = message.message || 'Не удалось импортировать FigLog';
     } else if (message.type === 'ERROR') {
       submitted = false; pendingDelete = false;
       renderList();

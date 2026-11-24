@@ -7,6 +7,7 @@ const ts = require('typescript');
 
 function setupWidget(count = 0) {
   const model = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../widget-src/model.ts'), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2019 } }).outputText;
+  const importer = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../widget-src/figlog-import.ts'), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2019 } }).outputText;
   const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../widget-src/code.tsx'), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2019, jsx: ts.JsxEmit.React, jsxFactory: 'figma.widget.h' } }).outputText;
   const records = new Map(Array.from({ length: count }, (_, i) => [`id-${i}`, {
     id: `id-${i}`, schemaVersion: 1, mode: i % 2 ? 'ds' : 'product', kind: 'change', category: i % 2 ? 'added' : null,
@@ -14,6 +15,7 @@ function setupWidget(count = 0) {
     createdAt: i * 1000, updatedAt: i * 1000,
   }]));
   const state = new Map();
+  const externalNodes = new Map();
   const activity = { uiMessages: [], opened: [], closed: 0 };
   let registered;
   const ui = { onmessage: null, postMessage: message => activity.uiMessages.push(message), close: () => { activity.closed += 1; } };
@@ -31,11 +33,12 @@ function setupWidget(count = 0) {
   };
   const ctx = vm.createContext({
     figma: { widget, currentUser: { id: 'user-now', name: 'Алексей' },
+      getNodeByIdAsync: async id => externalNodes.get(id) || null,
       showUI: (html, options) => { activity.opened.push({ html, options }); }, ui },
     __html__: '<html></html>', console,
   });
-  vm.runInContext(`${model}\n${code}`, ctx);
-  return { records, state, ui, activity, render: () => registered() };
+  vm.runInContext(`${model}\n${importer}\n${code}`, ctx);
+  return { records, state, ui, activity, externalNodes, render: () => registered() };
 }
 function findAll(tree, predicate) {
   if (Array.isArray(tree)) return tree.flatMap(x => findAll(x, predicate));
@@ -251,4 +254,71 @@ test('pencil activation highlights only selected edit Input; other entries stay 
   tree=f.render();
   assert.equal(findAll(tree,n=>n.props?.name==='Редактирование записи').length,0);
   assert.deepEqual(f.records.get('id-1'),before);
+});
+
+
+test('experimental import preserves source author/time, skips duplicates on retry and never rewrites legacy data', async () => {
+  const f = setupWidget(2);
+  const existing = f.records.get('id-0');
+  const mkText = (name, characters, visible = true) => ({ type:'TEXT', name, characters, visible, parent:null });
+  const mkRow = (id, author, date, content) => {
+    const nodes = [mkText('Date', author), mkText('Created', date),
+      mkText('EditableChange','Your update...', false), mkText('EditableChange', content)];
+    const row = { type:'FRAME', id, name:'ChangeLogRow', visible:true, parent:null,
+      findAll: (fn) => nodes.filter(fn) };
+    nodes.forEach(node => node.parent = row);
+    return row;
+  };
+  const rows = [mkRow('74:476','Original Author','11|15|26 @ 1:22 AM','Note one'),
+    mkRow('74:499','Other Author','11|15|26 @ 1:19 AM','Note two')];
+  const frame = { type:'FRAME', id:'74:437', name:'FigLog (Widget)', visible:true,
+    findAll:(fn)=>rows.filter(fn) };
+  rows.forEach(row => row.parent = frame);
+  f.externalNodes.set(frame.id,frame);
+  named(f.render(),'Open history').props.onClick();
+  f.ui.onmessage({type:'FIGLOG_PREVIEW',frameId:'74:437'});
+  await new Promise(resolve => setImmediate(resolve));
+  const preview=f.activity.uiMessages.find(x=>x.type==='FIGLOG_PREVIEW_RESULT');
+  assert.equal(preview.ready,2);
+  f.ui.onmessage({type:'FIGLOG_IMPORT'});
+  assert.equal(f.records.size,4);
+  assert.deepEqual(f.records.get('id-0'),existing);
+  const imported=[...f.records.values()].filter(r=>r.importedFrom);
+  assert.equal(imported.length,2);
+  assert.equal(imported[0].authorName,'Original Author');
+  assert.equal(imported[0].createdAt,new Date(2026,10,15,1,22).getTime());
+  assert.equal(imported[0].authorId,null);
+  f.ui.onmessage({type:'FIGLOG_PREVIEW',frameId:'74:437'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.activity.uiMessages.filter(x=>x.type==='FIGLOG_PREVIEW_RESULT').at(-1).ready,0);
+  f.ui.onmessage({type:'FIGLOG_IMPORT'});
+  assert.equal(f.records.size,4);
+  assert.equal(f.activity.uiMessages.filter(x=>x.type==='FIGLOG_IMPORTED').at(-1).added,0);
+});
+
+
+test('experimental importer refuses large 51-record write without mutating synced data', async () => {
+  const f=setupWidget(1);
+  const mkRow=(i) => {
+    const children=[
+      {type:'TEXT', name:'Date', characters:'Designer', visible:true, parent:null},
+      {type:'TEXT', name:'Created', characters:'11|15|26 @ 10:05 AM', visible:true, parent:null},
+      {type:'TEXT', name:'EditableChange', characters:'Note '+i, visible:true, parent:null}
+    ];
+    const row={type:'FRAME',id:'80:'+(i+100),name:'ChangeLogRow',visible:true,parent:null,findAll:(fn)=>children.filter(fn)};
+    children.forEach(node=>node.parent=row);
+    return row;
+  };
+  const rows=Array.from({length:51},(_,i)=>mkRow(i));
+  const source={type:'FRAME',id:'80:1',name:'FigLog',visible:true,findAll:(fn)=>rows.filter(fn)};
+  rows.forEach(row=>row.parent=source);
+  f.externalNodes.set('80:1',source);
+  named(f.render(),'Open history').props.onClick();
+  f.ui.onmessage({type:'FIGLOG_PREVIEW',frameId:'80:1'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.activity.uiMessages.filter(m=>m.type==='FIGLOG_PREVIEW_RESULT').at(-1).ready,51);
+  f.ui.onmessage({type:'FIGLOG_IMPORT'});
+  assert.equal(f.records.size,1);
+  assert.equal(f.activity.uiMessages.at(-1).type,'FIGLOG_ERROR');
+  assert.match(f.activity.uiMessages.at(-1).message,/50/);
 });
