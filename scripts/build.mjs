@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const ts = require('typescript');
 const root = path.resolve(import.meta.dirname, '..');
-const result = ['widget-src/model.ts', 'widget-src/code.tsx'].map((name) => {
+const result = ['widget-src/model.ts', 'widget-src/figlog-import.ts', 'widget-src/code.tsx'].map((name) => {
   const source = fs.readFileSync(path.join(root, name), 'utf8');
   const output = ts.transpileModule(source, {
     compilerOptions: {

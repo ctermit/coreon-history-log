@@ -15,6 +15,7 @@ interface HistoryRecord {
   authorName: string;
   createdAt: number;
   updatedAt: number;
+  importedFrom?: { app: 'FigLog'; frameId: string; rowId: string; createdLabel: string; editedLabel: string | null };
 }
 
 type MarkdownSegment =
