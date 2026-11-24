@@ -295,3 +295,30 @@ test('experimental import preserves source author/time, skips duplicates on retr
   assert.equal(f.records.size,4);
   assert.equal(f.activity.uiMessages.filter(x=>x.type==='FIGLOG_IMPORTED').at(-1).added,0);
 });
+
+
+test('experimental importer refuses large 51-record write without mutating synced data', async () => {
+  const f=setupWidget(1);
+  const mkRow=(i) => {
+    const children=[
+      {type:'TEXT', name:'Date', characters:'Designer', visible:true, parent:null},
+      {type:'TEXT', name:'Created', characters:'11|15|26 @ 10:05 AM', visible:true, parent:null},
+      {type:'TEXT', name:'EditableChange', characters:'Note '+i, visible:true, parent:null}
+    ];
+    const row={type:'FRAME',id:'80:'+(i+100),name:'ChangeLogRow',visible:true,parent:null,findAll:(fn)=>children.filter(fn)};
+    children.forEach(node=>node.parent=row);
+    return row;
+  };
+  const rows=Array.from({length:51},(_,i)=>mkRow(i));
+  const source={type:'FRAME',id:'80:1',name:'FigLog',visible:true,findAll:(fn)=>rows.filter(fn)};
+  rows.forEach(row=>row.parent=source);
+  f.externalNodes.set('80:1',source);
+  named(f.render(),'Open history').props.onClick();
+  f.ui.onmessage({type:'FIGLOG_PREVIEW',frameId:'80:1'});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.activity.uiMessages.filter(m=>m.type==='FIGLOG_PREVIEW_RESULT').at(-1).ready,51);
+  f.ui.onmessage({type:'FIGLOG_IMPORT'});
+  assert.equal(f.records.size,1);
+  assert.equal(f.activity.uiMessages.at(-1).type,'FIGLOG_ERROR');
+  assert.match(f.activity.uiMessages.at(-1).message,/50/);
+});

@@ -57,3 +57,5 @@ The isolated branch `experiment/figlog-migration` adds a **test-only** import ac
 - The importer is experimental and must not be merged into stable `main` or published until owner-approved after real file testing.
 
 For this experiment, the checked-in `dist/code.js` is intentionally the **frozen 0.2.3** bundle. Always install from the **CI-built test ZIP** for PR #9, not from raw files in this branch. On standard production PRs, CI continues to enforce exact generated-bundle synchronization.
+
+**Current experiment safety limit:** up to 50 imported entries per confirmation; larger FigLogs may be previewed but require a separately reviewed chunked-import implementation before any writes.

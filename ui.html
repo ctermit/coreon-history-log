@@ -85,8 +85,8 @@
           <option value="handoff">Передано</option>
         </select>
       </div>
-      <div id="counter" class="secondary tiny"></div><div id="list"></div><div id="pageFooter" class="footer"></div>
       <div class="figlog-tools"><button id="figlogOpen" class="link" type="button">Импорт FigLog (эксперимент)</button></div>
+      <div id="counter" class="secondary tiny"></div><div id="list"></div><div id="pageFooter" class="footer"></div>
       <section id="figlogImport" class="figlog-import" hidden>
         <label for="figlogSource">Ссылка на разбитый FigLog в этом файле</label>
         <input id="figlogSource" placeholder="Ссылка Figma или 74:437" />
@@ -345,7 +345,8 @@
       const skipped = Array.isArray(message.skipped) ? message.skipped : [];
       $('figlogResult').textContent = 'Строк: ' + message.rowCount + ' · к переносу: ' + figlogReady +
         ' · уже перенесено: ' + message.duplicates + ' · пропущено: ' + skipped.length +
-        '\nДаты читаются как локальное время без известного часового пояса. Проверьте их после импорта.';
+        '\nДаты читаются как локальное время без известного часового пояса. Проверьте их после импорта.' +
+        (figlogReady > (message.experimentalLimit || 50) ? '\nБольшой журнал пока доступен только для просмотра: лимит импорта 50 записей.' : '');
       $('figlogExamples').replaceChildren();
       for (const example of (message.examples || []).slice(0, 10)) {
         $('figlogExamples').append(tag('div', 'figlog-example',
@@ -355,7 +356,7 @@
         $('figlogExamples').append(tag('div', 'secondary tiny', 'Пропущено ' + issue.rowId + ': ' + issue.reason));
       }
       $('figlogConfirm').textContent = 'Импортировать ' + figlogReady + ' записей';
-      $('figlogConfirm').hidden = !figlogReady;
+      $('figlogConfirm').hidden = !figlogReady || figlogReady > (message.experimentalLimit || 50);
     } else if (message.type === 'FIGLOG_IMPORTED') {
       figlogWaiting = false;
       figlogReady = 0;

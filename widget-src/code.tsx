@@ -163,6 +163,7 @@ function CoreonHistoryLog() {
                 frameId: parsed.frameId,
                 rowCount: parsed.rowCount,
                 ready: parsed.entries.filter((item) => !items.get(item.id)).length,
+                experimentalLimit: 50,
                 duplicates: parsed.entries.filter((item) => !!items.get(item.id)).length,
                 skipped: parsed.skipped,
                 examples: parsed.entries.slice(0, 10).map((item) => ({
@@ -178,6 +179,8 @@ function CoreonHistoryLog() {
           })();
         } else if (message.type === 'FIGLOG_IMPORT') {
           if (!figlogPreview || figlogBusy) throw new Error('Сначала проверьте источник');
+          const canImport = figlogPreview.entries.filter((entry) => !items.get(entry.id)).length;
+          if (canImport > 50) throw new Error('Эксперимент ограничен 50 записями за импорт. Большой FigLog можно проверить без записи.');
           figlogBusy = true;
           const preview = figlogPreview;
           figlogPreview = null;
@@ -204,7 +207,8 @@ function CoreonHistoryLog() {
           resolve?.();
         }
       } catch (error) {
-        figma.ui.postMessage({ type: 'ERROR', message: error instanceof Error ? error.message : 'Не удалось сохранить запись' });
+        figma.ui.postMessage({ type: message.type.startsWith('FIGLOG_') ? 'FIGLOG_ERROR' : 'ERROR',
+          message: error instanceof Error ? error.message : 'Не удалось сохранить запись' });
       }
     };
     if (panelOpen) figma.ui.postMessage(snapshot());

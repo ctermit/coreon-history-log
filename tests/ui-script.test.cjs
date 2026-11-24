@@ -213,3 +213,13 @@ test('experimental FigLog UI requires preview before asking widget to import', (
   f.fakeWindow.onmessage({ data: { pluginMessage: { type: 'FIGLOG_IMPORTED', added: 4, duplicates: 0, skipped: 0 } } });
   assert.equal(f.get('figlogConfirm').hidden, true);
 });
+
+
+test('more than 50 FigLog entries show a preview but disable import', () => {
+  const f=setup();
+  f.fakeWindow.onmessage({data:{pluginMessage:{
+    type:'FIGLOG_PREVIEW_RESULT',rowCount:100,ready:51,duplicates:0,skipped:[],examples:[],experimentalLimit:50
+  }}});
+  assert.equal(f.get('figlogConfirm').hidden,true);
+  assert.match(f.get('figlogResult').textContent,/лимит импорта 50/);
+});
