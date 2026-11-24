@@ -194,6 +194,7 @@ test('confirmation overlays the chosen entry without adding a block below it; cl
 
 test('experimental FigLog UI requires preview before asking widget to import', () => {
   const f = setup();
+  f.get('figlogImport').hidden = true; // HTML has the initial hidden attribute; mock DOM must reflect it.
   f.get('figlogOpen').onclick();
   assert.equal(f.get('figlogImport').hidden, false);
   f.get('figlogSource').value = 'https://www.figma.com/design/example/file?node-id=74-437';

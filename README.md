@@ -55,3 +55,5 @@ The isolated branch `experiment/figlog-migration` adds a **test-only** import ac
 - Original time-zone metadata is unavailable in detached layers; dates are interpreted as Figma's local time and original labels retained for audit. Confirm results before using a different time zone.
 - Uses deterministic source-frame/source-row IDs so repeat imports skip existing entries, including edited imported records.
 - The importer is experimental and must not be merged into stable `main` or published until owner-approved after real file testing.
+
+For this experiment, the checked-in `dist/code.js` is intentionally the **frozen 0.2.3** bundle. Always install from the **CI-built test ZIP** for PR #9, not from raw files in this branch. On standard production PRs, CI continues to enforce exact generated-bundle synchronization.

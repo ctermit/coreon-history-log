@@ -282,7 +282,11 @@
   $('figlogInspect').onclick = () => {
     if (figlogWaiting) return;
     const raw = $('figlogSource').value.trim();
-    const decoded = decodeURIComponent(raw);
+    let decoded = raw;
+    try { decoded = decodeURIComponent(raw); } catch (_) {
+      $('figlogResult').textContent = 'Некорректная ссылка Figma';
+      return;
+    }
     const match = decoded.match(/[?&]node-id=(\d+)[:-](\d+)/) || decoded.match(/^(\d+)[:-](\d+)$/);
     $('figlogConfirm').hidden = true;
     $('figlogExamples').replaceChildren();
