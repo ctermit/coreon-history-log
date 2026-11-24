@@ -76,10 +76,14 @@ test('Markdown: HTML and javascript URLs remain inert text', () => {
   assert.ok(lines[0].segments.some(s => s.kind === 'text' && s.text.includes('javascript:')));
 });
 
-test('date/time includes hours and minutes (locale-aware)', () => {
-  const text = api.formatDateTime(new Date('2026-11-15T10:35:22Z').getTime());
-  assert.match(text, /2026/);
-  assert.match(text, /\d{2}:\d{2}/);
-  assert.doesNotMatch(text, /,/);
-  assert.match(text, /\d{2}\.\d{2}\.2026 \d{2}:\d{2}/);
+test('canvas timestamps use local date and strict 24-hour HH:mm, even without reliable Intl', () => {
+  class BrokenLocaleDate extends Date {
+    toLocaleTimeString() { return '9:05 PM'; }
+    toLocaleDateString() { return '11/15/2026'; }
+  }
+  const isolatedFormat = vm.runInNewContext(`${compiled}\nformatDateTime`, { Date: BrokenLocaleDate });
+  const localTime = new Date(2026, 10, 15, 21, 5).getTime();
+  assert.equal(isolatedFormat(localTime), '15.11.2026 21:05');
+  assert.equal(api.formatDateTime(new Date(2026, 10, 15, 0, 7).getTime()), '15.11.2026 00:07');
+  assert.equal(api.formatDateTime(new Date(2026, 10, 15, 13, 45).getTime()), '15.11.2026 13:45');
 });

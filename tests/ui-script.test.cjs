@@ -12,7 +12,7 @@ function mockNode(name, text = '') {
     focus(){}, setAttribute(){}};
   return node;
 }
-function setup() {
+function setup(dateClass = null) {
   const elements = new Map();
   const sent = [];
   const doc = {
@@ -22,7 +22,7 @@ function setup() {
   };
   doc.getElementById('typeFilter').value = 'all';
   const fakeWindow = { onmessage:null };
-  const ctx = vm.createContext({ window:fakeWindow, document:doc, parent:{postMessage:(m)=>sent.push(m)} });
+  const ctx = vm.createContext({ window:fakeWindow, document:doc, parent:{postMessage:(m)=>sent.push(m)}, ...(dateClass ? {Date:dateClass} : {}) });
   vm.runInContext(script, ctx);
   return { doc, elements, sent, fakeWindow, get:id=>doc.getElementById(id) };
 }
@@ -155,11 +155,20 @@ test('HTML editor handles ordinary keystrokes and Escape without throwing', () =
   assert.equal(f.sent.filter(x=>x.pluginMessage.type==='EDIT').length,0);
 });
 
-test('history timestamps use JetBrains Mono with Roboto Mono fallback and no comma', () => {
+test('history timestamps match the canvas 24-hour format without Intl', () => {
+  class BrokenLocaleDate extends Date {
+    toLocaleTimeString() { return '9:05 PM'; }
+    toLocaleDateString() { return '11/15/2026'; }
+  }
+  const f = setup(BrokenLocaleDate);
+  const timestamp = new Date(2026, 10, 15, 21, 5).getTime();
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records:[{
+    id:'date',text:'Note',authorName:'Designer',createdAt:timestamp,kind:'change',category:'changed'
+  }]}}});
+  const meta = f.get('list').children[0].children[0];
+  assert.equal(meta.children[1].textContent,'15.11.2026 21:05');
   assert.match(html, /JetBrains Mono/);
   assert.match(html, /Roboto Mono/);
-  assert.match(html, /toLocaleDateString/);
-  assert.match(html, /toLocaleTimeString/);
   assert.match(html, /secondary tiny timestamp/);
 });
 
