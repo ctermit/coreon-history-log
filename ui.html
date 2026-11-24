@@ -21,7 +21,7 @@
     .filter { display: flex; gap: 8px; margin-bottom: 13px; }
     .filter input { flex: 1; min-width: 0; }
     .filter select { width: 135px; }
-    .entry { padding: 14px 0; border-bottom: 1px solid var(--figma-color-border, #e6e7eb); }
+    .entry { position:relative; padding: 14px 0; border-bottom: 1px solid var(--figma-color-border, #e6e7eb); }
     .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; line-height: 18px; margin-bottom: 7px; }
     .author { font-weight: 650; }
     .tag { font-size: 11px; font-weight: 650; border-radius: 4px; padding: 2px 6px; background: var(--figma-color-bg-secondary, #f1f3f5); }
@@ -30,7 +30,17 @@
     .markdown ul, .markdown ol { margin: 3px 0 7px; padding-left: 22px; }
     .markdown li { margin: 2px 0; white-space: pre-wrap; }
     .markdown a { color: var(--figma-color-text-brand, #2469e8); text-decoration: underline; }
-    .edit-link { padding: 0; margin-top: 8px; color: var(--figma-color-text-brand, #2469e8); font-size: 12px; }
+    .entry-actions { display:flex; align-items:center; gap:16px; margin-top:8px; }
+    .edit-link, .delete-link { padding:0; font-size:12px; }
+    .edit-link { color:var(--figma-color-text-brand,#2469e8); }
+    .delete-link { color:var(--figma-color-text-danger,#c93635); }
+    .delete-confirmation { position:absolute; inset:0; z-index:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:6px; text-align:center; }
+    .delete-confirmation::before { content:''; position:absolute; inset:0; background:var(--figma-color-bg,#fff); opacity:.9; pointer-events:none; }
+    .delete-confirmation > * { position:relative; z-index:1; }
+    .delete-confirmation-title { font-size:13px; font-weight:650; }
+    .delete-confirmation-actions { display:flex; align-items:center; justify-content:center; gap:8px; }
+    .delete-confirmation-actions .secondary-btn, .delete-confirmation-actions .danger-primary { padding:6px 12px; }
+
     .handoff { padding: 12px; margin-top: 4px; font-weight: 650; background: var(--figma-color-bg-secondary, #f1f3f5); border-radius: 6px; }
     .footer { display: flex; align-items: center; justify-content: space-between; margin-top: 15px; gap: 10px; }
     .empty { text-align: center; color: var(--figma-color-text-secondary, #697080); padding: 40px 20px; }
@@ -42,10 +52,6 @@
     .help-icon { width:20px; height:20px; border-radius:50%; border:1px solid var(--figma-color-border, #b9bdc4); font-size:12px; color:var(--figma-color-text-secondary,#697080); }
     .danger { color:var(--figma-color-text-danger,#c93635); padding:9px 0; }
     .danger-primary { background:var(--figma-color-bg-danger,#b91c1c); color:white; padding:10px 14px; border-radius:7px; font-weight:650; }
-    #deleteConfirmation { margin-top:16px; padding:14px; border:1px solid var(--figma-color-border-danger,#e9b2b2); border-radius:8px; }
-    #deleteConfirmation[hidden] { display:none; }
-    #deleteConfirmation p { line-height:1.5; margin:6px 0; }
-    #deleteConfirmation .buttons { justify-content:flex-end; }
     #editor { display: none; }
     #editor.active { display: block; }
     #history.hidden { display: none; }
@@ -58,7 +64,7 @@
   </style>
 </head>
 <body>
-  <header><div><h1>Вся история изменений</h1><div id="total" class="secondary tiny">Загрузка записей…</div></div><button class="link" id="close" aria-label="Закрыть">Закрыть</button></header>
+  <header><div><h1>Вся история изменений</h1><div id="total" class="secondary tiny">Загрузка записей…</div></div></header>
   <main>
     <section id="history">
       <div class="filter">
@@ -78,12 +84,7 @@
         title="**текст** — жирный&#10;[название](https://…) — ссылка&#10;https://… — автоматическая ссылка&#10;- пункт — список&#10;1. пункт — нумерация">?</button></div>
       <textarea id="editText" maxlength="5000" aria-describedby="saveHint"></textarea>
       <div class="secondary tiny" id="saveHint">Изменения сохраняются при выходе из поля</div>
-      <div class="buttons"><button id="deleteEntry" class="danger" type="button">Удалить запись</button><button id="cancelEdit" class="secondary-btn" type="button">Отмена</button></div>
-      <div id="deleteConfirmation" hidden>
-        <strong>Удалить эту запись?</strong>
-        <p class="secondary">Действие нельзя отменить через журнал. Другие записи останутся без изменений.</p>
-        <div class="buttons"><button id="cancelDelete" class="secondary-btn" type="button">Отмена</button><button id="confirmDelete" class="danger-primary" type="button">Удалить</button></div>
-      </div>
+      <div class="buttons"><button id="cancelEdit" class="secondary-btn" type="button">Отмена</button></div>
     </section>
     <div id="error" role="status" aria-live="polite"></div>
   </main>
@@ -98,6 +99,7 @@
   let originalText = '';
   let preventBlurSave = false;
   let pendingDelete = false;
+  let deleting = null;
   const pageSize = 40;
   const send = (message) => parent.postMessage({ pluginMessage: message }, '*');
   const tag = (name, className = '', text = '') => {
@@ -108,7 +110,8 @@
   };
   const formatDate = (n) => {
     const date = new Date(n);
-    return `${date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
   };
   const catLabel = (category) => ({ added: 'Added', changed: 'Changed', fixed: 'Fixed' })[category] || '';
   const category = (r) => r.kind === 'handoff' ? null : (r.category || 'changed');
@@ -116,7 +119,7 @@
   function showEditor(visible) {
     $('history').classList.toggle('hidden', visible);
     $('editor').classList.toggle('active', visible);
-    $('deleteConfirmation').hidden = true;
+    deleting = null;
     error('');
   }
   function appendInline(target, raw) {
@@ -180,35 +183,70 @@
       card.append(meta);
       if (rec.kind === 'handoff') card.append(tag('div', 'handoff', rec.text));
       else card.append(renderMarkdown(rec.text));
-      {
-        const button = tag('button', 'edit-link', 'Редактировать');
-        button.type = 'button';
-        button.onclick = () => {
-          editing = rec.id;
-          originalText = rec.text;
-          preventBlurSave = false;
-          pendingDelete = false;
-          submitted = false;
-          $('editText').value = rec.text;
-          showEditor(true);
-          $('editText').focus();
+      const actions = tag('div', 'entry-actions');
+      const editButton = tag('button', 'edit-link', 'Редактировать');
+      editButton.type = 'button';
+      editButton.disabled = pendingDelete;
+      editButton.onclick = () => {
+        deleting = null;
+        editing = rec.id;
+        originalText = rec.text;
+        preventBlurSave = false;
+        submitted = false;
+        $('editText').value = rec.text;
+        showEditor(true);
+        $('editText').focus();
+      };
+      const deleteButton = tag('button', 'delete-link', 'Удалить');
+      deleteButton.type = 'button';
+      deleteButton.disabled = pendingDelete;
+      deleteButton.onclick = () => {
+        if (pendingDelete) return;
+        deleting = rec.id;
+        renderList();
+      };
+      actions.append(editButton, deleteButton);
+      card.append(actions);
+      if (deleting === rec.id) {
+        const confirmation = tag('div', 'delete-confirmation');
+        confirmation.setAttribute('role', 'group');
+        confirmation.setAttribute('aria-label', 'Подтверждение удаления');
+        confirmation.append(tag('span', 'delete-confirmation-title', 'Удалить запись?'));
+        const cancel = tag('button', 'secondary-btn', 'Отмена');
+        cancel.type = 'button';
+        cancel.disabled = pendingDelete;
+        cancel.onclick = () => {
+          if (pendingDelete) return;
+          deleting = null;
+          renderList();
         };
-        card.append(button);
+        const confirm = tag('button', 'danger-primary', 'Удалить');
+        confirm.type = 'button';
+        confirm.disabled = pendingDelete;
+        confirm.onclick = () => {
+          if (pendingDelete || deleting !== rec.id) return;
+          pendingDelete = true;
+          renderList();
+          send({ type: 'DELETE', id: rec.id });
+        };
+        const buttons = tag('div', 'delete-confirmation-actions');
+        buttons.append(confirm, cancel);
+        confirmation.append(buttons);
+        card.append(confirmation);
       }
       root.append(card);
     }
     const footer = $('pageFooter'); footer.replaceChildren();
     footer.append(tag('span', 'secondary tiny', `${matching.length ? start + 1 : 0}–${Math.min(start + pageSize, matching.length)} из ${matching.length}`));
     if (page > 0) {
-      const prev = tag('button', 'secondary-btn', 'Назад'); prev.onclick = () => { page -= 1; renderList(); }; footer.append(prev);
+      const prev = tag('button', 'secondary-btn', 'Назад'); prev.onclick = () => { if (!pendingDelete) deleting = null; page -= 1; renderList(); }; footer.append(prev);
     }
     if (start + pageSize < matching.length) {
-      const next = tag('button', 'secondary-btn', 'Дальше'); next.onclick = () => { page += 1; renderList(); }; footer.append(next);
+      const next = tag('button', 'secondary-btn', 'Дальше'); next.onclick = () => { if (!pendingDelete) deleting = null; page += 1; renderList(); }; footer.append(next);
     }
   }
-  $('close').onclick = () => send({ type: 'CLOSE' });
-  $('search').oninput = () => { page = 0; renderList(); };
-  $('typeFilter').onchange = () => { page = 0; renderList(); };
+  $('search').oninput = () => { if (!pendingDelete) deleting = null; page = 0; renderList(); };
+  $('typeFilter').onchange = () => { if (!pendingDelete) deleting = null; page = 0; renderList(); };
   function commitHistoryEdit() {
     if (preventBlurSave || pendingDelete || submitted || editing === null) return;
     const text = $('editText').value.trim();
@@ -234,22 +272,6 @@
     editing = null;
     showEditor(false);
   };
-  $('deleteEntry').onpointerdown = () => { preventBlurSave = true; };
-  $('deleteEntry').onclick = () => {
-    preventBlurSave = true;
-    $('deleteConfirmation').hidden = false;
-  };
-  $('cancelDelete').onclick = () => {
-    $('deleteConfirmation').hidden = true;
-    preventBlurSave = false;
-    $('editText').focus();
-  };
-  $('confirmDelete').onclick = () => {
-    if (editing === null || pendingDelete) return;
-    preventBlurSave = true;
-    pendingDelete = true;
-    send({ type: 'DELETE', id: editing });
-  };
   window.onmessage = (event) => {
     const message = event.data && event.data.pluginMessage;
     if (!message || !message.type) return;
@@ -258,15 +280,15 @@
       renderList();
     } else if (message.type === 'ERROR') {
       submitted = false; pendingDelete = false;
+      renderList();
       error(message.message || 'Ошибка сохранения');
     } else if (message.type === 'SAVED' && submitted) {
       submitted = false;
       editing = null;
       showEditor(false);
-    } else if (message.type === 'DELETED' && pendingDelete && message.id === editing) {
+    } else if (message.type === 'DELETED' && pendingDelete && message.id === deleting) {
       pendingDelete = false;
-      editing = null;
-      showEditor(false);
+      deleting = null;
     }
   };
   send({ type: 'REQUEST_STATE' });

@@ -12,7 +12,7 @@ function mockNode(name, text = '') {
     focus(){}, setAttribute(){}};
   return node;
 }
-function setup() {
+function setup(dateClass = null) {
   const elements = new Map();
   const sent = [];
   const doc = {
@@ -22,7 +22,7 @@ function setup() {
   };
   doc.getElementById('typeFilter').value = 'all';
   const fakeWindow = { onmessage:null };
-  const ctx = vm.createContext({ window:fakeWindow, document:doc, parent:{postMessage:(m)=>sent.push(m)} });
+  const ctx = vm.createContext({ window:fakeWindow, document:doc, parent:{postMessage:(m)=>sent.push(m)}, ...(dateClass ? {Date:dateClass} : {}) });
   vm.runInContext(script, ctx);
   return { doc, elements, sent, fakeWindow, get:id=>doc.getElementById(id) };
 }
@@ -54,44 +54,88 @@ test('HTML renders unsupported dangerous link syntax as inert text',()=>{
 });
 
 
-test('history delete requires a confirmation and sends only one DELETE for the target', () => {
+test('list deletion is confirmed once by ID; cancel leaves records intact', () => {
   const f = setup();
   const records = [{id:'old',text:'Legacy handoff',authorName:'Designer',createdAt:1000,kind:'handoff',category:null},
     {id:'keep',text:'Keep note',authorName:'Designer',createdAt:999,kind:'change',category:'added'}];
   f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records}}});
-  const edit = f.get('list').children[0].children.at(-1);
-  assert.equal(edit.textContent,'Редактировать');
-  edit.onclick();
-  assert.equal(f.get('editText').value,'Legacy handoff');
-  f.get('deleteEntry').onpointerdown();
-  f.get('editText').onblur();
-  assert.equal(f.sent.filter(x => x.pluginMessage.type==='EDIT').length, 0);
-  f.get('deleteEntry').onclick();
-  assert.equal(f.get('deleteConfirmation').hidden,false);
-  assert.equal(f.sent.filter(x => x.pluginMessage.type==='DELETE').length, 0);
-  f.get('confirmDelete').onclick();
-  f.get('confirmDelete').onclick();
-  assert.equal(f.sent.filter(x => x.pluginMessage.type==='DELETE').length, 1);
+  const actions = f.get('list').children[0].children.at(-1);
+  assert.equal(actions.children[0].textContent, 'Редактировать');
+  assert.equal(actions.children[1].textContent, 'Удалить');
+  actions.children[1].onclick();
+  let confirmRow = f.get('list').children[0].children.at(-1);
+  assert.equal(confirmRow.className, 'delete-confirmation');
+  assert.equal(confirmRow.children[0].textContent,'Удалить запись?');
+  assert.equal(confirmRow.children.length,2);
+  assert.equal(confirmRow.children[1].children[0].textContent,'Удалить');
+  assert.equal(confirmRow.children[1].children[1].textContent,'Отмена');
+  confirmRow.children[1].children[1].onclick();
+  assert.equal(f.get('list').children[0].children.at(-1).className,'entry-actions');
+  assert.equal(f.sent.filter(x=>x.pluginMessage.type==='DELETE').length,0);
+  f.get('list').children[0].children.at(-1).children[1].onclick();
+  confirmRow = f.get('list').children[0].children.at(-1);
+  const confirm = confirmRow.children[1].children[0];
+  confirm.onclick();
+  confirm.onclick();
+  assert.equal(f.sent.filter(x=>x.pluginMessage.type==='DELETE').length,1);
   assert.equal(f.sent.at(-1).pluginMessage.id,'old');
+  assert.equal(f.sent.filter(x=>x.pluginMessage.type==='EDIT').length,0);
   f.fakeWindow.onmessage({data:{pluginMessage:{type:'DELETED',id:'old'}}});
-  assert.equal(f.get('deleteConfirmation').hidden,true);
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records:[records[1]]}}});
+  assert.equal(f.get('total').textContent,'1 записей');
+});
+
+test('oldest record remains deletable on the last page of 530 entries', () => {
+  const f = setup();
+  const records = Array.from({length:530},(_,i)=>({
+    id:'id-'+i,text:'Note '+i,authorName:'Designer',createdAt:530-i,kind:'change',category:'changed'
+  }));
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records}}});
+  for (let i=0;i<13;i++) {
+    const next=f.get('pageFooter').children.at(-1);
+    assert.equal(next.textContent,'Дальше');
+    next.onclick();
+  }
+  assert.equal(f.get('list').children.length,10);
+  const oldest=f.get('list').children.at(-1);
+  assert.equal(oldest.children[1].children[0].children[0].textContent,'Note 529');
+  oldest.children.at(-1).children[1].onclick();
+  const confirmation=f.get('list').children.at(-1).children.at(-1);
+  confirmation.children[1].children[0].onclick();
+  assert.equal(f.sent.at(-1).pluginMessage.id,'id-529');
+  assert.equal(f.sent.filter(x=>x.pluginMessage.type==='DELETE').length,1);
+});
+
+test('search can find and cancel deletion of an old record', () => {
+  const f=setup();
+  const records=Array.from({length:110},(_,i)=>({
+    id:'id-'+i,text:i===109?'Unique oldest note':'Other note '+i,
+    authorName:'Designer',createdAt:110-i,kind:'change',category:'changed'
+  }));
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records}}});
+  f.get('search').value='Unique oldest note';
+  f.get('search').oninput();
+  assert.equal(f.get('list').children.length,1);
+  f.get('list').children[0].children.at(-1).children[1].onclick();
+  f.get('list').children[0].children.at(-1).children[1].children[1].onclick();
+  assert.equal(f.sent.filter(x=>x.pluginMessage.type==='DELETE').length,0);
 });
 
 test('HTML history auto-saves changed text on blur, but skips unchanged/blank edits', () => {
   const f=setup();
   const rec={id:'a',text:'Original',authorName:'Designer',createdAt:10,kind:'change',category:'changed'};
   f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records:[rec]}}});
-  f.get('list').children[0].children.at(-1).onclick();
+  f.get('list').children[0].children.at(-1).children[0].onclick();
   f.get('editText').value='Changed';
   f.get('editText').onblur();
   assert.equal(f.sent.at(-1).pluginMessage.type,'EDIT');
   assert.equal(f.sent.at(-1).pluginMessage.newText,'Changed');
   f.fakeWindow.onmessage({data:{pluginMessage:{type:'SAVED'}}});
-  f.get('list').children[0].children.at(-1).onclick();
+  f.get('list').children[0].children.at(-1).children[0].onclick();
   const edits=f.sent.filter(x=>x.pluginMessage.type==='EDIT').length;
   f.get('editText').onblur(); // unchanged draft
   assert.equal(f.sent.filter(x=>x.pluginMessage.type==='EDIT').length,edits);
-  f.get('list').children[0].children.at(-1).onclick();
+  f.get('list').children[0].children.at(-1).children[0].onclick();
   f.get('editText').value='   ';
   f.get('editText').onblur();
   assert.equal(f.sent.filter(x=>x.pluginMessage.type==='EDIT').length,edits);
@@ -102,7 +146,7 @@ test('HTML editor handles ordinary keystrokes and Escape without throwing', () =
   const f = setup();
   const rec = {id:'key',text:'Original',authorName:'Designer',createdAt:10,kind:'change',category:'changed'};
   f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records:[rec]}}});
-  f.get('list').children[0].children.at(-1).onclick();
+  f.get('list').children[0].children.at(-1).children[0].onclick();
   assert.doesNotThrow(() => f.get('editText').onkeydown({key:'a',preventDefault(){}}));
   assert.doesNotThrow(() => f.get('editText').onkeydown({key:'Enter',preventDefault(){}}));
   let prevented = false;
@@ -111,10 +155,38 @@ test('HTML editor handles ordinary keystrokes and Escape without throwing', () =
   assert.equal(f.sent.filter(x=>x.pluginMessage.type==='EDIT').length,0);
 });
 
-test('history timestamps use JetBrains Mono with Roboto Mono fallback and no comma', () => {
+test('history timestamps match the canvas 24-hour format without Intl', () => {
+  class BrokenLocaleDate extends Date {
+    toLocaleTimeString() { return '9:05 PM'; }
+    toLocaleDateString() { return '11/15/2026'; }
+  }
+  const f = setup(BrokenLocaleDate);
+  const timestamp = new Date(2026, 10, 15, 21, 5).getTime();
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records:[{
+    id:'date',text:'Note',authorName:'Designer',createdAt:timestamp,kind:'change',category:'changed'
+  }]}}});
+  const meta = f.get('list').children[0].children[0];
+  assert.equal(meta.children[1].textContent,'15.11.2026 21:05');
   assert.match(html, /JetBrains Mono/);
   assert.match(html, /Roboto Mono/);
-  assert.match(html, /toLocaleDateString/);
-  assert.match(html, /toLocaleTimeString/);
   assert.match(html, /secondary tiny timestamp/);
+});
+
+test('confirmation overlays the chosen entry without adding a block below it; close is native only', () => {
+  assert.match(html, /\.delete-confirmation \{ position:absolute; inset:0;/);
+  assert.match(html, /\.delete-confirmation::before/);
+  assert.doesNotMatch(html, /id="close"/);
+  assert.doesNotMatch(html, /\$\('close'\)\.onclick/);
+  const f = setup();
+  const records = [
+    {id:'target',text:'Target',authorName:'A',createdAt:200,kind:'change',category:'changed'},
+    {id:'other',text:'Other',authorName:'B',createdAt:100,kind:'change',category:'changed'}
+  ];
+  f.fakeWindow.onmessage({data:{pluginMessage:{type:'STATE',records}}});
+  f.get('list').children[0].children.at(-1).children[1].onclick();
+  const target = f.get('list').children[0];
+  const other = f.get('list').children[1];
+  assert.equal(target.children.at(-1).className,'delete-confirmation');
+  assert.equal(other.children.at(-1).className,'entry-actions');
+  assert.equal(f.sent.filter(x=>x.pluginMessage.type==='DELETE').length,0);
 });

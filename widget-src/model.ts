@@ -92,8 +92,10 @@ function categoryLabel(category: ChangeCategory | null): string {
 }
 
 function formatDateTime(timestamp: number): string {
+  // Figma's widget runtime may ignore Intl formatting options such as hour12.
   const date = new Date(timestamp);
-  return `${date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+  const pad = (value: number): string => String(value).padStart(2, '0');
+  return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 /** Deliberately small Markdown subset: bold, HTTP(S) links and lists.

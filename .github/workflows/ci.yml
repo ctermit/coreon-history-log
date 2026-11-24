@@ -20,3 +20,10 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run check
+      - run: git diff --exit-code -- dist/code.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: design-history-log-test-${{ github.sha }}
+          path: artifacts/Design-History-Log-v*-test.zip
+          if-no-files-found: error
+          retention-days: 14
